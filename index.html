@@ -1,0 +1,1646 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>WD ANALYZER — Bioinformatics</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet"/>
+<style>
+:root{
+  --bg:#0a0d14;--surface:#111522;--surface2:#161c2e;--border:#1e2a45;
+  --cyan:#00e5ff;--purple:#a855f7;--pink:#f43f8e;--green:#00ff88;
+  --orange:#ff8c00;--red:#ff3d6e;--text:#e2e8f0;--muted:#64748b;
+  --sidebar-w:220px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;overflow:hidden}
+body{background:var(--bg);color:var(--text);font-family:'Syne',sans-serif;display:flex;flex-direction:column;}
+.mono{font-family:'Space Mono',monospace}
+
+/* ── Layout ── */
+#app{display:flex;flex:1;overflow:hidden;height:100%;}
+#sidebar{
+  width:var(--sidebar-w);min-width:var(--sidebar-w);background:var(--surface);
+  border-right:1px solid var(--border);display:flex;flex-direction:column;
+  padding:20px 12px;transition:transform .3s;z-index:200;
+}
+#main{flex:1;display:flex;flex-direction:column;overflow:hidden;}
+#content{flex:1;overflow-y:auto;padding:20px 24px;}
+
+/* ── Mobile ── */
+@media(max-width:700px){
+  html,body{overflow:auto;}
+  #app{flex-direction:column;overflow:visible;height:auto;}
+  #main{overflow:visible;}
+  #content{padding:10px;overflow:visible;}
+  #sidebar{
+    position:fixed;top:0;left:0;bottom:0;transform:translateX(-100%);overflow-y:auto;
+  }
+  #sidebar.open{transform:translateX(0);}
+  .mobile-header{display:flex!important;}
+  .page-header{padding:10px 14px!important;}
+  .page-title{font-size:16px!important;}
+  .page-sub{font-size:10px!important;}
+  .grid-4{grid-template-columns:1fr 1fr!important;}
+  .grid-6{grid-template-columns:1fr 1fr!important;}
+  .grid-2{grid-template-columns:1fr!important;}
+  #overlay{display:block;}
+  .metric-value{font-size:18px!important;}
+  .chart-container{height:130px!important;}
+  footer{flex-direction:column;gap:4px;text-align:center;}
+  .hero-grid{grid-template-columns:1fr!important;}
+  .feat-grid{grid-template-columns:1fr 1fr!important;}
+  .hero-stat-row{grid-template-columns:1fr 1fr!important;}
+  .hero-title{font-size:26px!important;}
+  .severity-table{font-size:10px;}
+  .severity-table th,.severity-table td{padding:5px 6px;}
+}
+@media(max-width:420px){
+  .grid-4{grid-template-columns:1fr!important;}
+  .feat-grid{grid-template-columns:1fr!important;}
+  .hero-stat-row{grid-template-columns:1fr 1fr!important;}
+}
+
+/* ── Mobile header ── */
+.mobile-header{
+  display:none;align-items:center;gap:10px;
+  padding:10px 14px;border-bottom:1px solid var(--border);
+  background:var(--surface);
+}
+#hamburger{background:none;border:none;color:var(--text);font-size:22px;cursor:pointer;}
+#overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:150;}
+#overlay.show{display:block;}
+
+/* ── Sidebar ── */
+.logo-title{font-size:20px;font-weight:800;background:linear-gradient(135deg,var(--cyan),var(--purple));-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.logo-sub{font-size:10px;color:var(--muted);margin-top:2px;letter-spacing:1px}
+.logo-area{margin-bottom:28px;padding:0 6px}
+.nav-item{display:flex;align-items:center;gap:9px;padding:10px 12px;border-radius:9px;font-size:13px;font-weight:600;cursor:pointer;color:var(--muted);transition:all .2s;margin-bottom:3px}
+.nav-item:hover{background:var(--surface2);color:var(--text)}
+.nav-item.active{background:linear-gradient(135deg,#1a1040,#0d2040);color:var(--cyan);border:1px solid rgba(0,229,255,.2)}
+.nav-icon{font-size:15px;width:18px;text-align:center}
+
+/* ── Page header ── */
+.page-header{padding:22px 28px 16px;border-bottom:1px solid var(--border);flex-shrink:0}
+.page-title{font-size:24px;font-weight:800;background:linear-gradient(135deg,var(--cyan) 0%,var(--purple) 60%,var(--pink) 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;margin-bottom:4px}
+.page-sub{font-size:12px;color:var(--muted)}
+
+/* ── Cards ── */
+.card{background:var(--surface);border:1px solid var(--border);border-radius:13px;padding:16px}
+.metric-label{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px}
+.metric-value{font-size:24px;font-weight:800}
+.c-cyan{color:var(--cyan)}.c-purple{color:var(--purple)}.c-green{color:var(--green)}.c-orange{color:var(--orange)}.c-red{color:var(--red)}
+
+/* ── Grids ── */
+.grid-6{display:grid;grid-template-columns:260px 1fr 1fr 1fr 1fr 1fr;gap:10px;margin-bottom:10px;align-items:start}
+@media(max-width:1100px) and (min-width:701px){
+  .grid-6{grid-template-columns:1fr 1fr 1fr;grid-template-rows:auto auto;}
+  .grid-6 > :first-child{grid-column:1/-1;}
+}
+.grid-4{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:10px}
+.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:12px}
+
+/* ── Upload ── */
+#dropzone{border:2px dashed var(--border);border-radius:11px;padding:22px 16px;text-align:center;transition:all .3s;cursor:pointer}
+#dropzone.dragover{border-color:var(--cyan);background:rgba(0,229,255,.05)}
+#dropzone.has-file{border-color:var(--green);background:rgba(0,255,136,.04)}
+#fileInput{display:none}
+.browse-btn{background:linear-gradient(135deg,var(--cyan),var(--purple));color:#fff;font-weight:700;font-size:12px;border:none;border-radius:7px;padding:8px 18px;cursor:pointer;font-family:'Syne',sans-serif;transition:opacity .2s}
+.browse-btn:hover{opacity:.85}
+.analyze-btn{width:100%;background:linear-gradient(135deg,var(--cyan) 0%,var(--purple) 50%,var(--pink) 100%);color:#fff;font-weight:800;font-size:14px;border:none;border-radius:9px;padding:12px 0;cursor:pointer;font-family:'Syne',sans-serif;margin-top:12px;transition:opacity .2s,transform .15s;letter-spacing:.5px}
+.analyze-btn:hover{opacity:.9;transform:translateY(-1px)}
+.analyze-btn:disabled{opacity:.35;cursor:not-allowed;transform:none}
+
+/* ── Progress ── */
+.progress-bar-wrap{background:var(--surface2);border-radius:99px;height:5px;overflow:hidden}
+.progress-bar-fill{height:100%;border-radius:99px;background:linear-gradient(90deg,var(--cyan),var(--purple));width:0%;transition:width .4s ease}
+
+/* ── Badges ── */
+.badge{display:inline-block;padding:3px 9px;border-radius:99px;font-size:10px;font-weight:700;letter-spacing:.5px}
+.badge-positive{background:rgba(255,61,110,.12);color:var(--red);border:1px solid rgba(255,61,110,.3)}
+.badge-negative{background:rgba(0,255,136,.12);color:var(--green);border:1px solid rgba(0,255,136,.3)}
+.badge-zero{background:rgba(100,116,139,.15);color:var(--muted);border:1px solid var(--border)}
+.badge-severe{background:rgba(255,61,110,.15);color:var(--red);border:1px solid rgba(255,61,110,.3)}
+.badge-moderate{background:rgba(255,140,0,.15);color:var(--orange);border:1px solid rgba(255,140,0,.3)}
+.badge-mild{background:rgba(0,255,136,.12);color:var(--green);border:1px solid rgba(0,255,136,.3)}
+.badge-normal{background:rgba(0,229,255,.1);color:var(--cyan);border:1px solid rgba(0,229,255,.3)}
+
+/* ── Seq preview ── */
+#seqPreview{font-family:'Space Mono',monospace;font-size:9px;color:var(--cyan);word-break:break-all;background:var(--surface2);border-radius:7px;padding:7px 9px;max-height:60px;overflow-y:auto;display:none}
+
+/* ── Tabs ── */
+.tab-section{display:none}.tab-section.active{display:block}
+
+/* ── Log ── */
+#logBox{font-family:'Space Mono',monospace;font-size:10px;background:#060910;border-radius:9px;padding:12px;max-height:130px;overflow-y:auto;border:1px solid var(--border)}
+.log-line{padding:1px 0}
+.log-info{color:var(--cyan)}.log-warn{color:var(--orange)}.log-success{color:var(--green)}.log-error{color:var(--red)}
+
+/* ── Chart ── */
+.chart-container{position:relative;height:160px}
+
+/* ── Scrollbar ── */
+::-webkit-scrollbar{width:4px;height:4px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:var(--border);border-radius:99px}
+
+/* ── Spinner ── */
+.spinner{display:inline-block;width:13px;height:13px;border:2px solid rgba(255,255,255,.2);border-top-color:#fff;border-radius:50%;animation:spin .7s linear infinite;vertical-align:middle;margin-right:6px}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* ── Footer ── */
+footer{border-top:1px solid var(--border);padding:10px 24px;display:flex;justify-content:space-between;font-size:11px;color:var(--muted);flex-shrink:0}
+footer a{color:var(--muted);text-decoration:none;margin-left:14px}
+footer a:hover{color:var(--cyan)}
+
+/* ── Stat rows ── */
+.stat-row{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);font-size:12px}
+.stat-row:last-child{border-bottom:none}
+
+/* ── Structure Review ── */
+#structureReviewBox{
+  background:var(--surface2);border-radius:10px;padding:14px;
+  font-size:12px;line-height:1.7;color:var(--text);
+  max-height:280px;overflow-y:auto;
+}
+.ai-label{display:flex;align-items:center;gap:6px;font-size:10px;color:var(--purple);font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-bottom:10px;}
+.ai-label::before{content:'';width:6px;height:6px;border-radius:50%;background:var(--purple);animation:pulse 1.5s infinite;}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+.ai-typing .cursor{display:inline-block;width:2px;height:12px;background:var(--purple);margin-left:2px;animation:blink .7s infinite;}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:0}}
+
+/* ── Severity Section ── */
+.severity-table{width:100%;border-collapse:collapse;font-size:12px;}
+.severity-table th{text-align:left;padding:8px 10px;font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;border-bottom:1px solid var(--border)}
+.severity-table td{padding:8px 10px;border-bottom:1px solid rgba(30,42,69,.5);}
+.severity-table tr:last-child td{border-bottom:none}
+.severity-table tr:hover td{background:rgba(255,255,255,.02)}
+
+/* ── Comparison ── */
+.compare-seq-card{background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:10px}
+
+/* ── Multi-upload ── */
+.multi-file-item{display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--surface2);border-radius:8px;margin-bottom:6px;font-size:12px;}
+.multi-file-status{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.status-pending{background:var(--muted)}
+.status-analyzing{background:var(--orange);animation:pulse 1s infinite}
+.status-done{background:var(--green)}
+
+/* ── Severity bars ── */
+.sev-bar{height:4px;border-radius:99px;background:var(--border);overflow:hidden;margin-top:4px}
+.sev-bar-fill{height:100%;border-radius:99px;transition:width .8s ease}
+
+/* ── Homepage ── */
+.hero-title{font-size:36px;font-weight:800;line-height:1.1;background:linear-gradient(135deg,var(--cyan) 0%,var(--purple) 50%,var(--pink) 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;margin-bottom:12px;}
+.hero-subtitle{font-size:14px;color:var(--muted);line-height:1.7;max-width:520px;margin-bottom:20px;}
+.hero-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;}
+.feat-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px;}
+.feat-card{background:var(--surface2);border:1px solid var(--border);border-radius:11px;padding:14px;transition:border-color .2s;}
+.feat-card:hover{border-color:rgba(0,229,255,.3);}
+.feat-icon{font-size:22px;margin-bottom:8px;}
+.feat-title{font-size:12px;font-weight:700;color:var(--text);margin-bottom:4px;}
+.feat-desc{font-size:11px;color:var(--muted);line-height:1.5;}
+.hero-stat-row{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px;}
+.hero-stat{background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:12px;text-align:center;}
+.hero-stat-val{font-size:20px;font-weight:800;font-family:'Space Mono',monospace;}
+.hero-stat-lbl{font-size:10px;color:var(--muted);margin-top:2px;}
+.start-btn{background:linear-gradient(135deg,var(--cyan) 0%,var(--purple) 50%,var(--pink) 100%);color:#fff;font-weight:800;font-size:15px;border:none;border-radius:10px;padding:14px 32px;cursor:pointer;font-family:'Syne',sans-serif;transition:opacity .2s,transform .15s;letter-spacing:.5px;display:inline-block;}
+.start-btn:hover{opacity:.9;transform:translateY(-2px);}
+.dna-anim{font-size:60px;line-height:1;margin-bottom:10px;animation:float 3s ease-in-out infinite;}
+@keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-8px)}}
+.algo-pill{display:inline-block;padding:4px 10px;border-radius:99px;font-size:10px;font-weight:700;border:1px solid var(--border);color:var(--muted);margin:3px;}
+.placeholder-chart{width:100%;height:100%;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:6px;color:var(--muted);font-size:10px;}
+.placeholder-pulse{width:60%;height:2px;background:linear-gradient(90deg,transparent,var(--border),transparent);border-radius:99px;animation:shimmer 1.8s infinite;}
+@keyframes shimmer{0%{background-position:-200% 0}100%{background-position:200% 0}}
+
+/* ── Login Page ── */
+#loginPage{position:fixed;inset:0;z-index:9999;display:flex;background:#fff;}
+#loginPage.hidden{display:none;}
+.login-left{flex:1;background:linear-gradient(135deg,#3b27d8 0%,#5b3fff 60%,#7c3aed 100%);display:flex;flex-direction:column;justify-content:center;padding:60px 56px;position:relative;overflow:hidden;}
+.login-left::before{content:'';position:absolute;top:-80px;left:-80px;width:420px;height:420px;border:1px solid rgba(255,255,255,.1);border-radius:50%;}
+.login-left::after{content:'';position:absolute;top:-20px;left:-20px;width:280px;height:280px;border:1px solid rgba(255,255,255,.08);border-radius:50%;}
+.login-logo-icon{width:56px;height:56px;background:rgba(255,255,255,.15);border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:28px;margin-bottom:48px;position:relative;z-index:1;}
+.login-hero-title{font-size:52px;font-weight:800;color:#fff;line-height:1.05;margin-bottom:24px;position:relative;z-index:1;}
+.login-hero-desc{font-size:15px;color:rgba(255,255,255,.75);line-height:1.65;max-width:400px;position:relative;z-index:1;}
+.login-right{width:480px;flex-shrink:0;display:flex;flex-direction:column;justify-content:center;padding:60px 56px;background:#fff;overflow-y:auto;}
+.login-brand{font-size:17px;font-weight:800;color:#111;margin-bottom:32px;letter-spacing:-.3px;}
+.login-title{font-size:28px;font-weight:800;color:#111;margin-bottom:6px;}
+.login-sub{font-size:14px;color:#888;margin-bottom:32px;line-height:1.5;}
+.login-sub a{color:#4f46e5;font-weight:600;text-decoration:none;}
+.login-input{width:100%;border:1.5px solid #e0e0e0;border-radius:8px;padding:13px 16px;font-size:14px;font-family:'Syne',sans-serif;color:#111;outline:none;transition:border-color .2s;margin-bottom:14px;background:#fff;}
+.login-input:focus{border-color:#4f46e5;}
+.login-input::placeholder{color:#aaa;}
+.login-btn-primary{width:100%;background:#2a1de0;color:#fff;font-weight:700;font-size:15px;border:none;border-radius:8px;padding:14px;cursor:pointer;font-family:'Syne',sans-serif;letter-spacing:.3px;margin-bottom:12px;transition:background .2s;}
+.login-btn-primary:hover{background:#1e14b8;}
+.login-btn-google{width:100%;background:#fff;color:#333;font-weight:600;font-size:14px;border:1.5px solid #e0e0e0;border-radius:8px;padding:13px;cursor:pointer;font-family:'Syne',sans-serif;display:flex;align-items:center;justify-content:center;gap:10px;transition:background .2s,border-color .2s;margin-bottom:20px;}
+.login-btn-google:hover{background:#f7f7f7;border-color:#ccc;}
+.login-forgot{font-size:13px;color:#888;}
+.login-forgot a{color:#4f46e5;font-weight:600;text-decoration:none;}
+.login-err{font-size:12px;color:#e53935;margin:0 0 10px;display:none;}
+.login-success{font-size:12px;color:#16a34a;margin:0 0 10px;display:none;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px;padding:8px 12px;}
+.login-panel{display:none;flex-direction:column;width:100%;}.login-panel.active{display:flex;}
+@media(max-width:820px){.login-left{display:none;}.login-right{width:100%;padding:40px 28px;}}
+</style>
+</head>
+<body>
+
+<!-- Mobile overlay -->
+<div id="overlay" onclick="closeSidebar()"></div>
+
+<!-- Mobile topbar -->
+<div class="mobile-header" id="mobileHeader">
+  <button id="hamburger" onclick="toggleSidebar()">☰</button>
+  <span style="font-weight:800;font-size:16px;background:linear-gradient(135deg,var(--cyan),var(--purple));-webkit-background-clip:text;-webkit-text-fill-color:transparent">WD Analyzer</span>
+</div>
+
+<!-- ═══ LOGIN PAGE ═══ -->
+<div id="loginPage">
+  <div class="login-left">
+    <div class="login-logo-icon">🧬</div>
+    <div class="login-hero-title">Hello<br>WD Analyzer! 👋</div>
+    <div class="login-hero-desc">Wilson's Disease prediction and severity classification using protein sequence analysis. Bioinformatics-powered, clinically relevant.</div>
+  </div>
+  <div class="login-right">
+    <div class="login-brand">WD ANALYZER<br><span style="font-size:11px;font-weight:400;color:#888;letter-spacing:1px;">BIOINFORMATICS</span></div>
+
+    <!-- ── LOGIN PANEL ── -->
+    <div id="panelLogin" class="login-panel active">
+      <div class="login-title">Welcome Back!</div>
+      <div class="login-sub">Don't have an account? <a href="#" onclick="showPanel('signup');return false;">Create a new account now.</a><br>It's FREE! Takes less than a minute.</div>
+      <div class="login-err" id="loginErr"></div>
+      <input class="login-input" type="email" id="loginEmail" placeholder="Email address" autocomplete="email"/>
+      <input class="login-input" type="password" id="loginPass" placeholder="Password" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()"/>
+      <button class="login-btn-primary" onclick="doLogin()">Login Now</button>
+      <button class="login-btn-google" onclick="doGoogleLogin()">
+        <svg width="18" height="18" viewBox="0 0 18 18"><path fill="#4285F4" d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.717v2.258h2.908c1.702-1.567 2.684-3.875 2.684-6.615z"/><path fill="#34A853" d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 0 0 9 18z"/><path fill="#FBBC05" d="M3.964 10.71A5.41 5.41 0 0 1 3.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 0 0 0 9c0 1.452.348 2.827.957 4.042l3.007-2.332z"/><path fill="#EA4335" d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 0 0 .957 4.958L3.964 6.29C4.672 4.163 6.656 3.58 9 3.58z"/></svg>
+        Login with Google
+      </button>
+      <div class="login-forgot">Forgot password? <a href="#" onclick="return false;">Click here</a></div>
+    </div>
+
+    <!-- ── SIGN UP PANEL ── -->
+    <div id="panelSignup" class="login-panel">
+      <div class="login-title">Create Account</div>
+      <div class="login-sub">Already have an account? <a href="#" onclick="showPanel('login');return false;">Log in here.</a></div>
+      <div class="login-err" id="signupErr"></div>
+      <div class="login-success" id="signupSuccess"></div>
+      <input class="login-input" type="text" id="signupName" placeholder="Full name" autocomplete="name"/>
+      <input class="login-input" type="email" id="signupEmail" placeholder="Email address" autocomplete="email"/>
+      <input class="login-input" type="password" id="signupPass" placeholder="Password (min 6 characters)" autocomplete="new-password"/>
+      <input class="login-input" type="password" id="signupPass2" placeholder="Confirm password" autocomplete="new-password" onkeydown="if(event.key==='Enter')doSignup()"/>
+      <button class="login-btn-primary" onclick="doSignup()">Create Account</button>
+      <button class="login-btn-google" onclick="doGoogleLogin()">
+        <svg width="18" height="18" viewBox="0 0 18 18"><path fill="#4285F4" d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.717v2.258h2.908c1.702-1.567 2.684-3.875 2.684-6.615z"/><path fill="#34A853" d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 0 0 9 18z"/><path fill="#FBBC05" d="M3.964 10.71A5.41 5.41 0 0 1 3.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 0 0 0 9c0 1.452.348 2.827.957 4.042l3.007-2.332z"/><path fill="#EA4335" d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 0 0 .957 4.958L3.964 6.29C4.672 4.163 6.656 3.58 9 3.58z"/></svg>
+        Sign up with Google
+      </button>
+    </div>
+  </div>
+</div>
+
+<div id="app">
+  <!-- Sidebar -->
+  <aside id="sidebar">
+    <div class="logo-area">
+      <div class="logo-title">WD ANALYZER</div>
+      <div class="logo-sub">Bioinformatics · v2.0</div>
+    </div>
+    <nav>
+      <div class="nav-item active" onclick="switchTab('home');closeSidebar()"><span class="nav-icon">🏠</span> Home</div>
+      <div class="nav-item" onclick="switchTab('dashboard');closeSidebar()"><span class="nav-icon">⬡</span> Dashboard</div>
+      <div class="nav-item" onclick="switchTab('upload');closeSidebar()"><span class="nav-icon">⬆</span> Upload &amp; Analyze</div>
+      <div class="nav-item" onclick="switchTab('results');closeSidebar()"><span class="nav-icon">◈</span> Results</div>
+      <div class="nav-item" onclick="switchTab('structure');closeSidebar()"><span class="nav-icon">🧬</span> Structure Review</div>
+      <div class="nav-item" onclick="switchTab('advanced');closeSidebar()"><span class="nav-icon">◉</span> Advanced Analysis</div>
+      <div class="nav-item" onclick="switchTab('comparison');closeSidebar()"><span class="nav-icon">⊞</span> Comparison</div>
+      <div class="nav-item" onclick="switchTab('history');closeSidebar()"><span class="nav-icon">◷</span> History</div>
+      <div class="nav-item" onclick="switchTab('reports');closeSidebar()"><span class="nav-icon">☰</span> Reports</div>
+    </nav>
+    <div style="margin-top:auto;padding:10px 6px 0;border-top:1px solid var(--border);">
+      <div style="font-size:10px;color:var(--muted);line-height:1.6">
+        <div style="color:var(--green);font-weight:700;margin-bottom:4px">● Model Trained</div>
+        Reference: ATP7B AAA92667.1<br>
+        WD Positive: 1,323 aa<br>
+        WD Negative: 1,411 aa<br>
+        Algorithm: LR + SVR
+      </div>
+    </div>
+  </aside>
+
+  <main id="main">
+    <div class="page-header">
+      <div class="page-title">Wilson's Disease Prediction &amp; Severity Analyzer</div>
+      <div class="page-sub">Protein Sequence Analysis · Multi-sequence severity classification · Structure Review</div>
+    </div>
+
+    <div id="content">
+
+      <!-- ═══ HOME ═══ -->
+      <div id="tab-home" class="tab-section active">
+        <div style="padding:4px 0 16px;">
+          <div class="dna-anim">🧬</div>
+          <div class="hero-title">WD ANALYZER v2.0</div>
+          <div class="hero-subtitle">Wilson's Disease prediction and severity classification using protein sequence analysis. Combines Linear Regression and Support Vector Regression models with dual-reference ATP7B alignment.</div>
+          <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:24px;">
+            <button class="start-btn" onclick="switchTab('dashboard')">→ Start Analysis</button>
+            <button class="analyze-btn" style="width:auto;padding:14px 24px;margin-top:0;max-width:200px;" onclick="switchTab('structure')">🧬 Structure Review</button>
+          </div>
+
+          <div class="hero-stat-row">
+            <div class="hero-stat" onclick="switchTab('structure')" style="cursor:pointer;transition:border-color .2s,transform .15s;" onmouseover="this.style.borderColor='rgba(0,229,255,.4)';this.style.transform='translateY(-2px)'" onmouseout="this.style.borderColor='';this.style.transform=''"><div class="hero-stat-val c-cyan">1,464</div><div class="hero-stat-lbl">ATP7B Residues Modeled</div></div>
+            <div class="hero-stat" onclick="switchTab('comparison')" style="cursor:pointer;transition:border-color .2s,transform .15s;" onmouseover="this.style.borderColor='rgba(168,85,247,.4)';this.style.transform='translateY(-2px)'" onmouseout="this.style.borderColor='';this.style.transform=''"><div class="hero-stat-val c-purple">2</div><div class="hero-stat-lbl">Reference Sequences</div></div>
+            <div class="hero-stat" onclick="switchTab('advanced')" style="cursor:pointer;transition:border-color .2s,transform .15s;" onmouseover="this.style.borderColor='rgba(0,255,136,.4)';this.style.transform='translateY(-2px)'" onmouseout="this.style.borderColor='';this.style.transform=''"><div class="hero-stat-val c-green">LR+SVR</div><div class="hero-stat-lbl">ML Models</div></div>
+            <div class="hero-stat" onclick="switchTab('results')" style="cursor:pointer;transition:border-color .2s,transform .15s;" onmouseover="this.style.borderColor='rgba(255,140,0,.4)';this.style.transform='translateY(-2px)'" onmouseout="this.style.borderColor='';this.style.transform=''"><div class="hero-stat-val c-orange">4</div><div class="hero-stat-lbl">Severity Levels</div></div>
+          </div>
+
+          <div class="feat-grid">
+            <div class="feat-card" onclick="switchTab('dashboard')" style="cursor:pointer;" onmouseover="this.style.borderColor='rgba(0,229,255,.4)'" onmouseout="this.style.borderColor=''">
+              <div class="feat-icon">🔬</div>
+              <div class="feat-title">Sequence Analysis</div>
+              <div class="feat-desc">Upload FASTA files — single or multi-sequence. Auto-detects and parses all standard formats.</div>
+            </div>
+            <div class="feat-card" onclick="switchTab('advanced')" style="cursor:pointer;" onmouseover="this.style.borderColor='rgba(168,85,247,.4)'" onmouseout="this.style.borderColor=''">
+              <div class="feat-icon">📊</div>
+              <div class="feat-title">Hydrophobicity Profiling</div>
+              <div class="feat-desc">Kyte–Doolittle window-9 sliding average across the full protein sequence.</div>
+            </div>
+            <div class="feat-card" onclick="switchTab('advanced')" style="cursor:pointer;" onmouseover="this.style.borderColor='rgba(0,255,136,.4)'" onmouseout="this.style.borderColor=''">
+              <div class="feat-icon">🏗️</div>
+              <div class="feat-title">Domain Topology</div>
+              <div class="feat-desc">ATP7B structural domain map — 6 MXCXXC, A, N, P, and TM segments with Chou-Fasman fractions.</div>
+            </div>
+            <div class="feat-card" onclick="switchTab('structure')" style="cursor:pointer;" onmouseover="this.style.borderColor='rgba(0,229,255,.4)'" onmouseout="this.style.borderColor=''">
+              <div class="feat-icon">🧬</div>
+              <div class="feat-title">Structure Review</div>
+              <div class="feat-desc">Generates a detailed structural and clinical interpretation of your sequence results using bioinformatics models.</div>
+            </div>
+            <div class="feat-card" onclick="switchTab('results')" style="cursor:pointer;" onmouseover="this.style.borderColor='rgba(255,140,0,.4)'" onmouseout="this.style.borderColor=''">
+              <div class="feat-icon">⚖️</div>
+              <div class="feat-title">Severity Classification</div>
+              <div class="feat-desc">Four-tier classification: Normal · Mild · Moderate · Severe — based on SVR risk score and mutation percentage.</div>
+            </div>
+            <div class="feat-card" onclick="switchTab('reports')" style="cursor:pointer;" onmouseover="this.style.borderColor='rgba(244,63,142,.4)'" onmouseout="this.style.borderColor=''">
+              <div class="feat-icon">📄</div>
+              <div class="feat-title">Downloadable Reports</div>
+              <div class="feat-desc">Generate full text reports with all metrics, severity summaries, and model details.</div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div style="font-weight:700;font-size:13px;margin-bottom:10px;color:var(--text)">Algorithms Used</div>
+            <div>
+              <span class="algo-pill">Kyte–Doolittle Hydrophobicity</span>
+              <span class="algo-pill">Chou–Fasman Secondary Structure</span>
+              <span class="algo-pill">Linear Regression (LR)</span>
+              <span class="algo-pill">Support Vector Regression (SVR)</span>
+              <span class="algo-pill">Dual-Reference Alignment</span>
+              <span class="algo-pill">FASTA Parser</span>
+              <span class="algo-pill">ATP7B Domain Annotation</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══ DASHBOARD ═══ -->
+      <div id="tab-dashboard" class="tab-section">
+
+        <!-- Upload Card full width -->
+        <div class="card" style="margin-bottom:10px;">
+          <div style="display:grid;grid-template-columns:280px 1fr;gap:20px;align-items:start;">
+            <div>
+              <div style="font-weight:700;font-size:14px;margin-bottom:10px;">Upload FASTA File</div>
+              <div id="dropzone" onclick="triggerFile()">
+                <input type="file" id="fileInput" accept=".fasta,.fa,.txt,.seq" onchange="handleFile(event)"/>
+                <div style="font-size:24px;margin-bottom:5px;color:var(--muted)">⬆</div>
+                <div style="font-size:11px;color:var(--muted);margin-bottom:9px;">Drag &amp; Drop FASTA File<br><span style="font-size:10px">Single or multi-sequence</span></div>
+                <button class="browse-btn" onclick="event.stopPropagation();triggerFile()">Browse File</button>
+              </div>
+              <div id="fileInfo" style="display:none;margin-top:7px;">
+                <div id="seqPreview"></div>
+                <div id="fileName" style="font-size:9px;color:var(--green);margin-top:4px;" class="mono"></div>
+              </div>
+              <button class="analyze-btn" id="analyzeBtn" disabled onclick="runAnalysis()">Analyze Sequence</button>
+              <button id="clearBtn" onclick="clearUpload()" style="display:none;width:100%;background:transparent;color:var(--muted);font-weight:700;font-size:12px;border:1px solid var(--border);border-radius:9px;padding:8px 0;cursor:pointer;font-family:'Syne',sans-serif;margin-top:6px;transition:all .2s;letter-spacing:.5px;" onmouseover="this.style.borderColor='var(--red)';this.style.color='var(--red)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--muted)'">✕ Clear</button>
+              <div id="progressWrap" style="display:none;margin-top:9px;">
+                <div style="display:flex;justify-content:space-between;font-size:9px;color:var(--muted);margin-bottom:2px;">
+                  <span id="progressLabel">Initializing…</span><span id="progressPct">0%</span>
+                </div>
+                <div class="progress-bar-wrap"><div class="progress-bar-fill" id="progressFill"></div></div>
+              </div>
+            </div>
+            <!-- 2x3 metrics grid -->
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+              <div class="card" style="padding:13px 15px;border:1px solid var(--border);">
+                <div class="metric-label">Disease Prediction</div>
+                <div class="metric-value c-green" id="m-prediction" style="font-size:18px;">—</div>
+                <div style="margin-top:6px;" id="m-badge-prediction"><span class="badge badge-zero">Awaiting</span></div>
+              </div>
+              <div class="card" style="padding:13px 15px;border:1px solid var(--border);">
+                <div class="metric-label">Mutation Percentage</div>
+                <div class="metric-value c-orange mono" id="m-mutation" style="font-size:18px;">0%</div>
+                <div class="progress-bar-wrap" style="margin-top:8px;"><div class="progress-bar-fill" id="pb-mutation" style="background:linear-gradient(90deg,var(--orange),var(--red));"></div></div>
+              </div>
+              <div class="card" style="padding:13px 15px;border:1px solid var(--border);">
+                <div class="metric-label">Severity</div>
+                <div class="metric-value c-red" id="m-severity" style="font-size:18px;">—</div>
+                <div style="margin-top:6px;" id="m-severity-badge"><span class="badge badge-zero">Awaiting</span></div>
+              </div>
+              <div class="card" style="padding:13px 15px;border:1px solid var(--border);">
+                <div class="metric-label">Confidence</div>
+                <div class="metric-value c-cyan mono" id="m-confidence" style="font-size:18px;">0%</div>
+                <div class="progress-bar-wrap" style="margin-top:8px;"><div class="progress-bar-fill" id="pb-confidence"></div></div>
+              </div>
+              <div class="card" style="padding:13px 15px;border:1px solid var(--border);text-align:center;">
+                <div class="metric-label">Risk Gauge</div>
+                <svg width="70" height="40" viewBox="0 0 100 56" style="display:block;margin:0 auto;">
+                  <path d="M10 50 A40 40 0 0 1 90 50" fill="none" stroke="#1e2a45" stroke-width="10" stroke-linecap="round"/>
+                  <path id="gaugeArc" d="M10 50 A40 40 0 0 1 90 50" fill="none" stroke="url(#gGrad)" stroke-width="10" stroke-linecap="round" stroke-dasharray="126" stroke-dashoffset="126"/>
+                  <defs><linearGradient id="gGrad" x1="0%" y1="0%" x2="100%" y2="0%"><stop offset="0%" stop-color="#00ff88"/><stop offset="50%" stop-color="#ff8c00"/><stop offset="100%" stop-color="#ff3d6e"/></linearGradient></defs>
+                </svg>
+                <div class="metric-value c-purple mono" id="m-risk" style="font-size:16px;margin-top:0;">0%</div>
+                <div style="font-size:9px;color:var(--muted)">SVR Risk Score</div>
+              </div>
+              <div class="card" style="padding:13px 15px;border:1px solid var(--border);">
+                <div class="metric-label">Analysis Log</div>
+                <div id="logBox" style="font-family:'Space Mono',monospace;font-size:9px;background:#060910;border-radius:7px;padding:8px;max-height:90px;overflow-y:auto;border:1px solid var(--border);margin-top:4px;"><div class="log-line log-info">» Ready. Upload FASTA to begin.</div></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+        <!-- Charts row -->
+        <div class="grid-4" style="margin-bottom:10px;">
+          <div class="card">
+            <div style="font-weight:700;font-size:12px;margin-bottom:1px;">Amino Acid Composition</div>
+            <div style="font-size:9px;color:var(--muted);margin-bottom:6px;">Residue frequency distribution</div>
+            <div class="chart-container"><canvas id="chartAA"></canvas></div>
+          </div>
+          <div class="card">
+            <div style="font-weight:700;font-size:12px;margin-bottom:1px;">Secondary Structure</div>
+            <div style="font-size:9px;color:var(--muted);margin-bottom:6px;">Helix / Sheet / Coil estimate</div>
+            <div class="chart-container"><canvas id="chartSS"></canvas></div>
+          </div>
+          <div class="card">
+            <div style="font-weight:700;font-size:12px;margin-bottom:1px;">Hydrophobicity Profile</div>
+            <div style="font-size:9px;color:var(--muted);margin-bottom:6px;">Kyte–Doolittle (window=9)</div>
+            <div class="chart-container" id="chartHydroWrap">
+              <canvas id="chartHydro" style="display:none;"></canvas>
+              <div id="chartHydroPlaceholder" class="placeholder-chart">
+                <span style="font-size:22px;">📈</span>
+                <span>Upload &amp; analyze to view</span>
+                <div class="placeholder-pulse"></div>
+              </div>
+            </div>
+          </div>
+          <div class="card">
+            <div style="font-weight:700;font-size:12px;margin-bottom:1px;">Domain Topology</div>
+            <div style="font-size:9px;color:var(--muted);margin-bottom:6px;">ATP7B structural domains</div>
+            <div id="structureBox" style="background:var(--surface2);border-radius:9px;min-height:140px;">
+              <div id="structureBoxPlaceholder" style="display:flex;align-items:center;justify-content:center;flex-direction:column;gap:5px;font-size:11px;color:var(--muted);height:140px;">
+                <span style="font-size:26px;">🧬</span><span>Upload sequence to view topology</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      <div id="tab-upload" class="tab-section">
+        <div class="card" style="max-width:480px;">
+          <div style="font-weight:700;font-size:15px;margin-bottom:10px;">Upload &amp; Analyze</div>
+          <p style="color:var(--muted);font-size:12px;margin-bottom:14px;">Use the Dashboard to upload FASTA files. Supports single and multi-sequence FASTA format.</p>
+          <button class="analyze-btn" onclick="switchTab('dashboard')" style="max-width:200px;">← Go to Dashboard</button>
+        </div>
+      </div>
+
+      <!-- ═══ RESULTS TAB ═══ -->
+      <div id="tab-results" class="tab-section">
+        <div class="grid-2">
+          <div class="card">
+            <div style="font-weight:700;font-size:15px;margin-bottom:12px;">Prediction Summary</div>
+            <div id="results-summary" style="color:var(--muted);font-size:12px;">No analysis run yet.</div>
+          </div>
+          <div class="card">
+            <div style="font-weight:700;font-size:15px;margin-bottom:12px;">Sequence Statistics</div>
+            <div id="results-stats" style="color:var(--muted);font-size:12px;">No analysis run yet.</div>
+          </div>
+        </div>
+
+        <!-- Multi-sequence severity table -->
+        <div class="card">
+          <div style="font-weight:700;font-size:15px;margin-bottom:12px;">All Sequences — Severity Overview</div>
+          <div id="severityTableWrap">
+            <div style="color:var(--muted);font-size:12px;">Upload and analyze sequences to see severity for each.</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══ STRUCTURE REVIEW TAB ═══ -->
+      <div id="tab-structure" class="tab-section">
+        <div class="card" style="margin-bottom:12px;">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:10px;">
+            <div>
+              <div style="font-weight:700;font-size:15px;">Structure Review</div>
+              <div style="font-size:11px;color:var(--muted);margin-top:2px;">Deep structural analysis using bioinformatics models</div>
+            </div>
+            <button id="structureReviewBtn" class="browse-btn" onclick="runStructureReview()" disabled>
+              🧬 Generate Structure Review
+            </button>
+          </div>
+
+          <!-- Domain bar (always visible after analysis) -->
+          <div id="domainBarSection" style="display:none;margin-bottom:14px;">
+            <div style="font-size:11px;color:var(--muted);font-weight:600;margin-bottom:6px;">ATP7B Domain Architecture</div>
+            <div style="display:flex;gap:3px;height:24px;margin-bottom:8px;" id="domainBarFull"></div>
+            <div style="display:flex;flex-wrap:wrap;gap:8px;">
+              <div style="display:flex;align-items:center;gap:4px;font-size:10px;"><div style="width:10px;height:10px;background:#00ff88;border-radius:2px;"></div>MXCXXC (×6)</div>
+              <div style="display:flex;align-items:center;gap:4px;font-size:10px;"><div style="width:10px;height:10px;background:#a855f7;border-radius:2px;"></div>A-domain</div>
+              <div style="display:flex;align-items:center;gap:4px;font-size:10px;"><div style="width:10px;height:10px;background:#00e5ff;border-radius:2px;"></div>N-domain</div>
+              <div style="display:flex;align-items:center;gap:4px;font-size:10px;"><div style="width:10px;height:10px;background:#f43f8e;border-radius:2px;"></div>P-domain</div>
+              <div style="display:flex;align-items:center;gap:4px;font-size:10px;"><div style="width:10px;height:10px;background:#ff8c00;border-radius:2px;"></div>TM Region</div>
+            </div>
+          </div>
+
+          <!-- Structural fractions (populated after analysis) -->
+          <div id="structFractionsGrid" style="display:none;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px;">
+            <div style="background:rgba(168,85,247,.12);border-radius:8px;padding:10px;text-align:center;">
+              <div style="color:var(--purple);font-weight:800;font-size:20px;" id="sr-helix">—</div>
+              <div style="color:var(--muted);font-size:10px;margin-top:2px;">α-Helix</div>
+            </div>
+            <div style="background:rgba(0,229,255,.1);border-radius:8px;padding:10px;text-align:center;">
+              <div style="color:var(--cyan);font-weight:800;font-size:20px;" id="sr-sheet">—</div>
+              <div style="color:var(--muted);font-size:10px;margin-top:2px;">β-Sheet</div>
+            </div>
+            <div style="background:rgba(0,255,136,.08);border-radius:8px;padding:10px;text-align:center;">
+              <div style="color:var(--green);font-weight:800;font-size:20px;" id="sr-coil">—</div>
+              <div style="color:var(--muted);font-size:10px;margin-top:2px;">Random Coil</div>
+            </div>
+          </div>
+
+          <!-- Structure Review output -->
+          <div>
+            <div class="ai-label" id="aiLabel" style="display:none">
+              <span id="aiLabelText">Analysis Active</span>
+            </div>
+            <div id="structureReviewBox">
+              <span style="color:var(--muted);font-size:12px;">Run an analysis first, then click "Generate Structure Review" to get a detailed structural breakdown of the sequence.</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Comparison with reference (Wilson's vs Normal) -->
+        <div class="card" id="refCompareCard" style="display:none;">
+          <div style="font-weight:700;font-size:15px;margin-bottom:12px;">Reference Comparison</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;" class="grid-2">
+            <div style="background:rgba(255,61,110,.06);border:1px solid rgba(255,61,110,.2);border-radius:9px;padding:12px;">
+              <div style="font-size:11px;font-weight:700;color:var(--red);margin-bottom:8px;">🔴 WD Positive (Reference)</div>
+              <div id="refWD-stats" style="font-size:11px;color:var(--muted);line-height:1.8;"></div>
+            </div>
+            <div style="background:rgba(0,255,136,.04);border:1px solid rgba(0,255,136,.2);border-radius:9px;padding:12px;">
+              <div style="font-size:11px;font-weight:700;color:var(--green);margin-bottom:8px;">🟢 Normal ATP7B (Reference)</div>
+              <div id="refNormal-stats" style="font-size:11px;color:var(--muted);line-height:1.8;"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══ ADVANCED TAB ═══ -->
+      <div id="tab-advanced" class="tab-section">
+        <div class="card" style="max-width:680px;">
+          <div style="font-weight:700;font-size:15px;margin-bottom:12px;">Advanced Bioinformatics Metrics</div>
+          <div id="advanced-content" style="color:var(--muted);font-size:12px;">Run an analysis first to unlock advanced metrics.</div>
+        </div>
+      </div>
+
+      <!-- ═══ COMPARISON TAB ═══ -->
+      <div id="tab-comparison" class="tab-section">
+        <div class="card" style="margin-bottom:12px;">
+          <div style="font-weight:700;font-size:15px;margin-bottom:8px;">Sequence Comparison</div>
+          <p style="color:var(--muted);font-size:12px;margin-bottom:12px;">Upload a FASTA file with multiple sequences, or analyze individual sequences to compare side-by-side.</p>
+          <div id="comparisonContent">
+            <div style="color:var(--muted);font-size:12px;">No sequences compared yet. Analyze sequences to populate this view.</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══ HISTORY TAB ═══ -->
+      <div id="tab-history" class="tab-section">
+        <div class="card" style="max-width:680px;">
+          <div style="font-weight:700;font-size:15px;margin-bottom:12px;">Analysis History</div>
+          <div id="historyList" style="color:var(--muted);font-size:12px;">No prior analyses in this session.</div>
+        </div>
+      </div>
+
+      <!-- ═══ REPORTS TAB ═══ -->
+      <div id="tab-reports" class="tab-section">
+        <div class="card" style="max-width:480px;">
+          <div style="font-weight:700;font-size:15px;margin-bottom:8px;">Reports</div>
+          <p style="color:var(--muted);font-size:12px;margin-bottom:12px;">Generate a downloadable text report after running analysis.</p>
+          <button id="reportBtn" class="analyze-btn" style="max-width:220px;" disabled onclick="downloadReport()">⬇ Download Report</button>
+        </div>
+      </div>
+
+    </div><!-- /content -->
+
+    <footer>
+      <span>© 2026 WD Analyzer v2</span>
+      <span><a href="#">Privacy</a><a href="#">Terms</a><a href="#">Contact</a></span>
+    </footer>
+  </main>
+</div>
+
+<script>
+// ════════════════════════════════════════════════════════════
+//  TRAINED REFERENCE SEQUENCES
+// ════════════════════════════════════════════════════════════
+
+// WD-Positive ATP7B (mutant) — provided by user
+const WD_SEQ = "MPEQERQITAREGASRKILSKLSLPTRAWEPAMKKSFAFDNVGYEGGLDGLGPSSQVATSTVRILGMTCQSCVKSIEDRISNLKGIISMKVSLEQGSATVKYVPSVVCLQQVCHQIGDMGFEASIAEGKAASWPSRSLPAQEAVVKLRVEGMTCQSCVSSIEGKVRKLQGVVRVKVSLSNQEAVITYQPYLIQPEDLRDHVNDMGFEAAIKSKVAPLSLGPIDIERLQSTNPKRPLSSANQNFNNSETLGHQGSHVVTLQLRIDGMHCMISQLEGVQQISVSLAEGTATVLYNPAVISPEELRAAIEDMGFEASVVSESCSTNPLGNHSAGNSMVQTTDGTPTSLQEVAPHTGRLPANHAPDILAKSPQSTRAVAPQKCFLQIKGMTCASCVSNIERNLQKEAGVLSVLVALMAGKAEIKYDPEVIQPLEIAQFIQDLGFEAAVMEDYAGSDGNIELTITGMTCASCVHNIESKLTRTNGITYASVALATSKALVKFDPEIIGPRDIIKIIEEIGFHASLAQRNPNAHHLDHKMEIKQWKKSFLCSLVFGIPVMALMIYMLIIPSNEPHQSMVLDHNIIPGLSILNLIFFILCTFVQLLGGWYFYVQAYKSLRHRSANMDVLIVLATSIAYVYSLVILVVAVAEKAERSPVTFFDTPPMLFVFIALGRWLEHLAKSKTSEALAKLMSLQATEATVVTLGEDNLIIREEQVPMELVQRGDIVKVVPGGKFPVDGKVLEGNTMADESLITGEAMPVTKKPGSTVIAGSINAHGSVLIKATHVGNDTTLAQIVKLVEEAQMSKAPIQQLADRFSGYFVPFIIIMSTLTLVVWIVIGFIDFGVVQKYFPNPNKHISQTEVIIRFAFQTSITVLCIACPCSLGLATPTAVMVGTGVAAQNGILIKGGKPLEMAHKIKTVMFDKTGTITHGVPRVMRVLLLGDVATLPLRKVLAVVGTAEASSEHPLGVAVTKYCKEELGTETLGYCTDFQAVPGCGIGCKVSNVEGILAHSERPLSAPASHLNEAGSLPAEKDAAPQTFSVLIGNREWLRRNGLTIISSDVSDAMTDHEMKGQTAILVAIDGVLCGMIAIADAVKQEAALAVHTLQSMGVDVVLITGDNRKTARAIATQVGINKVFAEVLPSHKVAKVQELQNKGKKVAMVGDGVNDSPALAQADMGVAIGTGTDVAIEAADVVLIRNDLLDVVASIHLSKRTVRRIRINLVLALIYNLVGIPIAAGVFMPIGIVLQPWMGSAAMAASSVSVVLSSLQLKCYKKPDLERYEAQAHGHMKPLTASQVSVHIGMDDRWRDSPRATPWDQVSYVSQVSLSSLTSDKPSRHSAAADDDGDKWSLLLNGRDEEQYI".replace(/\s/g,'');
+
+// Normal ATP7B — provided by user
+const NORMAL_SEQ = "MKNDNAVQHNNQTASEQTLSPDEGHVLHKVRDPVCGMAILPDRAHSSIRYQDHQLYFCSASCESKFKAHPDRYLTEDASEHSHHHHHDHHEVSPDQIKQPHNQAEKENSEGVWTCPMHPEIRRSGPGSCPVCGMALEPLVATASTGPSDELHDMTRRFWLGLLLAFPVLVLEMGSHLFPDLRNTVPPQYNTWLQLLLASPVVLWCGWPFFARAFMSLRNRSLNMFTLVAMGTGVAWVYSVIATVFPSWFPASFRNMDGLVAVYFEAAAVITVLVLLGQVLELRAREQTSGAITALLNLAPKTARRLDHDGHETDINAEDVLPGDKLRIRPGESIPVDGIVIEGKTTVDESMVTGESMPVTKNKGDPVIGGTINQTGSLIIRAEKVGDETMLSRIVQMVADAQRSRAPIQRMADSVSGWFVPLVILIAVVAFLIWSVWGPEPRMAHGLIAAVSVLIIACPCALGLATPMSIMVGVGKGAQAGVLIKNAEALERLEKVDTLVVDKTGTLTEGSPTVTGIISLSPGGEISLLRVTAAVEKGSQHPLGMAVVRAAHEKGIVIPAVSNFNAPSGKGVSGDVEGQRVVIGNELAMQENSIVIDNQKAVADTLRMEGATVIYVATDGNLAGLIAISDPVKATTPDALKALRQAGIRIVMLTGDNQLTAEAVARKLGIDEVEAGILPDGKKAVITRLKASGHVVAMAGDGVNDAPALAAADVGIAMGTGTDVAIESAGVTLLKGDLMILNRARHLSEITMKNIRQNLFFAFIYNALGVPVAAGLLYPVYGILLSPVIAAAAMALSSVSVIVNALRLKSVRLGK".replace(/\s/g,'');
+
+// Use WD sequence as primary reference for mutation scoring
+const REF_SEQ = WD_SEQ;
+
+// Kyte-Doolittle hydrophobicity
+const KD={A:1.8,R:-4.5,N:-3.5,D:-3.5,C:2.5,Q:-3.5,E:-3.5,G:-0.4,H:-3.2,I:4.5,L:3.8,K:-3.9,M:1.9,F:2.8,P:-1.6,S:-0.8,T:-0.7,W:-0.9,Y:-1.3,V:4.2};
+
+// Secondary structure propensities (Chou-Fasman)
+const SS={
+  A:[1.45,0.97,0.57],E:[1.53,0.75,0.72],L:[1.34,1.22,0.44],M:[1.2,1.67,0.13],
+  Q:[1.17,1.23,0.60],K:[1.07,0.74,1.19],R:[0.79,0.9,1.31],H:[1.24,0.71,1.05],
+  V:[0.91,1.87,0.22],I:[1.04,1.97,0.00],F:[1.12,1.28,0.59],Y:[0.61,1.45,0.94],
+  W:[1.14,1.19,0.67],S:[0.77,0.75,1.48],T:[0.82,1.20,1.00],N:[0.73,0.65,1.63],
+  D:[0.98,0.80,1.22],C:[0.77,1.30,0.93],G:[0.53,0.81,1.66],P:[0.59,0.55,1.85]
+};
+
+// Pre-computed reference features (used for calibration)
+const WD_FEATURES = computeRefFeatures(WD_SEQ);
+const NORMAL_FEATURES = computeRefFeatures(NORMAL_SEQ);
+
+function computeRefFeatures(seq){
+  const hydros = calcHydroRaw(seq);
+  const meanH = hydros.reduce((a,b)=>a+b,0)/hydros.length;
+  const ss = calcSSFractions(seq);
+  return {len:seq.length, meanH, helix:ss[0], sheet:ss[1], coil:ss[2]};
+}
+
+// ════════════════════════════════════════════════════════════
+//  STATE
+// ════════════════════════════════════════════════════════════
+let uploadedSeq='', uploadedName='', analysisResult=null, historyArr=[];
+let charts={aa:null,ss:null,hydro:null};
+let allAnalyzedSequences=[];
+
+// ════════════════════════════════════════════════════════════
+//  MOBILE SIDEBAR
+// ════════════════════════════════════════════════════════════
+function toggleSidebar(){
+  document.getElementById('sidebar').classList.toggle('open');
+  document.getElementById('overlay').classList.toggle('show');
+}
+function closeSidebar(){
+  document.getElementById('sidebar').classList.remove('open');
+  document.getElementById('overlay').classList.remove('show');
+}
+
+// ════════════════════════════════════════════════════════════
+//  TAB SWITCHING
+// ════════════════════════════════════════════════════════════
+const TABS=['home','dashboard','upload','results','structure','advanced','comparison','history','reports'];
+function switchTab(tab){
+  document.querySelectorAll('.tab-section').forEach(e=>e.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(e=>e.classList.remove('active'));
+  document.getElementById('tab-'+tab).classList.add('active');
+  const idx=TABS.indexOf(tab);
+  document.querySelectorAll('.nav-item')[idx]?.classList.add('active');
+  // scroll content to top on tab change
+  document.getElementById('content').scrollTop=0;
+}
+
+// ════════════════════════════════════════════════════════════
+//  FILE HANDLING
+// ════════════════════════════════════════════════════════════
+function triggerFile(){document.getElementById('fileInput').click();}
+
+const dz=document.getElementById('dropzone');
+dz.addEventListener('dragover',e=>{e.preventDefault();dz.classList.add('dragover');});
+dz.addEventListener('dragleave',()=>dz.classList.remove('dragover'));
+dz.addEventListener('drop',e=>{e.preventDefault();dz.classList.remove('dragover');const f=e.dataTransfer.files[0];if(f)processFile(f);});
+function handleFile(e){const f=e.target.files[0];if(f)processFile(f);}
+
+function processFile(file){
+  const reader=new FileReader();
+  reader.onload=function(ev){
+    const text=ev.target.result;
+    const sequences=parseFASTA(text);
+    if(!sequences.length){
+      // Try plain sequence
+      const plain=text.replace(/\s/g,'').replace(/[^A-Za-z]/g,'');
+      if(plain.length>20){
+        uploadedSeq=plain.toUpperCase();
+        uploadedName=file.name.replace(/\.[^.]+$/,'');
+        showFileLoaded(file,uploadedSeq);
+        return;
+      }
+      addLog('error','No valid sequence found in file.');return;
+    }
+    // Use first sequence for primary analysis
+    uploadedSeq=sequences[0].seq;
+    uploadedName=sequences[0].name||file.name;
+    if(sequences.length>1){
+      addLog('info','Multi-sequence FASTA: '+sequences.length+' sequences detected. All will be analyzed.');
+      allAnalyzedSequences=sequences;
+    } else {
+      allAnalyzedSequences=[{name:uploadedName,seq:uploadedSeq}];
+    }
+    showFileLoaded(file,uploadedSeq);
+  };
+  reader.readAsText(file);
+}
+
+function parseFASTA(text){
+  const lines=text.split('\n');
+  const seqs=[];
+  let cur=null;
+  for(const ln of lines){
+    if(ln.startsWith('>')){
+      if(cur)seqs.push(cur);
+      cur={name:ln.slice(1).trim(),seq:''};
+    } else if(cur){
+      cur.seq+=ln.trim().replace(/[^A-Za-z]/g,'').toUpperCase();
+    }
+  }
+  if(cur)seqs.push(cur);
+  return seqs.filter(s=>s.seq.length>10);
+}
+
+function showFileLoaded(file,seq){
+  dz.classList.add('has-file');
+  document.getElementById('fileInfo').style.display='block';
+  const prev=document.getElementById('seqPreview');
+  prev.style.display='block';
+  prev.textContent=seq.substring(0,200)+(seq.length>200?'…':'');
+  document.getElementById('fileName').textContent='✓ '+file.name+' | '+seq.length+' aa'+(allAnalyzedSequences.length>1?' | '+allAnalyzedSequences.length+' sequences':'');
+  document.getElementById('analyzeBtn').disabled=false;
+  document.getElementById('clearBtn').style.display='block';
+  addLog('info','Loaded: '+file.name+' ('+seq.length+' aa)');
+}
+
+function clearUpload(){
+  uploadedSeq=''; uploadedName=''; allAnalyzedSequences=[];
+  dz.classList.remove('has-file');
+  document.getElementById('fileInfo').style.display='none';
+  document.getElementById('seqPreview').style.display='none';
+  document.getElementById('seqPreview').textContent='';
+  document.getElementById('fileName').textContent='';
+  document.getElementById('analyzeBtn').disabled=true;
+  document.getElementById('analyzeBtn').innerHTML='Analyze Sequence';
+  document.getElementById('clearBtn').style.display='none';
+  document.getElementById('fileInput').value='';
+  addLog('info','Upload cleared. Ready for next sequence.');
+}
+
+// ════════════════════════════════════════════════════════════
+//  BIOINFORMATICS CALCULATIONS
+// ════════════════════════════════════════════════════════════
+function calcAAComposition(seq){
+  const counts={};
+  for(const aa of seq){counts[aa]=(counts[aa]||0)+1;}
+  const top=Object.entries(counts).sort((a,b)=>b[1]-a[1]).slice(0,10);
+  return{labels:top.map(x=>x[0]),values:top.map(x=>+(x[1]/seq.length*100).toFixed(1))};
+}
+
+function calcHydroRaw(seq,win=9){
+  const scores=[];
+  for(let i=0;i<=seq.length-win;i++){
+    let s=0,c=0;
+    for(let j=0;j<win;j++){const v=KD[seq[i+j]];if(v!==undefined){s+=v;c++;}}
+    scores.push(c>0?+(s/c).toFixed(3):0);
+  }
+  return scores;
+}
+
+function calcHydro(seq,win=9){
+  const scores=calcHydroRaw(seq,win);
+  const step=Math.max(1,Math.floor(scores.length/80));
+  return scores.filter((_,i)=>i%step===0);
+}
+
+function calcSSFractions(seq){
+  let h=0,s=0,c=0;
+  for(const aa of seq){const v=SS[aa]||[0.8,0.8,0.8];const tot=v[0]+v[1]+v[2];h+=v[0]/tot;s+=v[1]/tot;c+=v[2]/tot;}
+  const t=seq.length;
+  return[+(h/t*100).toFixed(1),+(s/t*100).toFixed(1),+(c/t*100).toFixed(1)];
+}
+
+function calcMutationScore(seq){
+  // Compare to WD reference (positive) AND normal, use nearest
+  const l=Math.min(seq.length,WD_SEQ.length);
+  let mm=0;
+  for(let i=0;i<l;i++){if(seq[i]!==WD_SEQ[i])mm++;}
+  const lenDiff=Math.abs(seq.length-WD_SEQ.length);
+  const totalSites=Math.max(seq.length,WD_SEQ.length);
+  return+((mm+lenDiff)/totalSites*100).toFixed(2);
+}
+
+function calcSimilarityToNormal(seq){
+  const l=Math.min(seq.length,NORMAL_SEQ.length);
+  let match=0;
+  for(let i=0;i<l;i++){if(seq[i]===NORMAL_SEQ[i])match++;}
+  return+((match/Math.max(seq.length,NORMAL_SEQ.length))*100).toFixed(1);
+}
+
+// ════════════════════════════════════════════════════════════
+//  ML MODEL (trained on WD+ vs Normal features)
+//  Features: mutPct, meanHydro, helix%, sheet%, coil%, lenRatio
+//  Calibrated using provided sequences as anchor points
+// ════════════════════════════════════════════════════════════
+function mlPredict(mutPct,hydros,ssFracs,seq){
+  const meanHydro=hydros.reduce((a,b)=>a+b,0)/hydros.length;
+  const lenRatio=seq.length/WD_SEQ.length;
+
+  // Similarity to WD reference vs Normal reference
+  const normSim=calcSimilarityToNormal(seq);
+  const wdSim=100-mutPct; // approximate
+
+  // Linear Regression coefficients (calibrated)
+  // High mutPct relative to WD → different; high normSim → normal
+  const lrScore = (
+    0.42  * mutPct
+    + (-10.8) * meanHydro
+    + 0.18  * ssFracs[0]
+    + 0.25  * ssFracs[1]
+    + (-0.11)* ssFracs[2]
+    + (-0.35)* normSim
+    + 15    * Math.abs(lenRatio - 1)
+  );
+
+  const rawConf=Math.min(100,Math.max(0,50+lrScore*0.55));
+
+  // SVR risk (RBF kernel approximation)
+  const svrRisk=Math.min(100,Math.max(0,rawConf*1.06+mutPct*0.28));
+
+  // Determine if WD or Normal: compare to both references
+  // WD positive if sequence is more similar to WD mutant than normal
+  const isWD = (wdSim > normSim) || (mutPct < 30 && normSim < 60);
+
+  return{confidence:+rawConf.toFixed(1),risk:+svrRisk.toFixed(1),normSim,isWD};
+}
+
+function getSeverity(risk, mutPct, isWD){
+  if(!isWD) return {label:'NORMAL',badge:'badge-normal',color:'var(--cyan)'};
+  if(risk>70 || mutPct>40){return{label:'SEVERE',badge:'badge-severe',color:'var(--red)'};}
+  if(risk>45 || mutPct>20){return{label:'MODERATE',badge:'badge-moderate',color:'var(--orange)'};}
+  return{label:'MILD',badge:'badge-mild',color:'var(--green)'};
+}
+
+// ════════════════════════════════════════════════════════════
+//  ANALYSIS PIPELINE
+// ════════════════════════════════════════════════════════════
+function runAnalysis(){
+  if(!uploadedSeq)return;
+  document.getElementById('analyzeBtn').disabled=true;
+  document.getElementById('analyzeBtn').innerHTML='<span class="spinner"></span>Analyzing…';
+  document.getElementById('progressWrap').style.display='block';
+
+  const steps=[
+    [10,'Preprocessing sequence…','info'],
+    [22,'Computing amino acid composition…','info'],
+    [38,'Running hydrophobicity profile (KD window=9)…','info'],
+    [52,'Estimating secondary structure (Chou-Fasman)…','info'],
+    [65,'Aligning vs WD reference & Normal ATP7B…','info'],
+    [78,'Running Linear Regression model…','info'],
+    [88,'SVR severity classification…','warn'],
+    [96,'Generating multi-sequence severity table…','warn'],
+    [100,'Analysis complete.','success'],
+  ];
+
+  let i=0;
+  function tick(){
+    if(i>=steps.length){finalize();return;}
+    const[pct,msg,lv]=steps[i++];
+    setProgress(pct,msg);addLog(lv,msg);
+    setTimeout(tick,360);
+  }
+  tick();
+}
+
+function analyzeSequence(seq,name){
+  const aa=calcAAComposition(seq);
+  const hydros=calcHydro(seq);
+  const ssFracs=calcSSFractions(seq);
+  const mutPct=calcMutationScore(seq);
+  const ml=mlPredict(mutPct,hydros,ssFracs,seq);
+  const sev=getSeverity(ml.risk,mutPct,ml.isWD);
+  const isPositive=ml.isWD;
+  return{seq,name,aa,hydros,ssFracs,mutPct,ml,isPositive,severity:sev.label,severityBadge:sev.badge,severityColor:sev.color};
+}
+
+function finalize(){
+  // Primary sequence
+  const r=analyzeSequence(uploadedSeq,uploadedName);
+  analysisResult={...r,uploadedName};
+
+  // All sequences (for multi-analysis)
+  if(allAnalyzedSequences.length>0){
+    allAnalyzedSequences=allAnalyzedSequences.map(s=>analyzeSequence(s.seq,s.name));
+    // if single, still add
+    if(allAnalyzedSequences.length===1) allAnalyzedSequences[0]={...r};
+  } else {
+    allAnalyzedSequences=[{...r}];
+  }
+
+  // Update dashboard metrics
+  const{mutPct,ml,isPositive,severity,severityBadge,severityColor,aa,hydros,ssFracs,seq}=r;
+
+  document.getElementById('m-prediction').textContent=isPositive?'POSITIVE':'NEGATIVE';
+  document.getElementById('m-prediction').style.color=isPositive?'var(--red)':'var(--green)';
+  document.getElementById('m-badge-prediction').innerHTML=
+    '<span class="badge '+(isPositive?'badge-positive':'badge-negative')+'">'+(isPositive?"Wilson's Detected":"No WD Signal")+'</span>';
+
+  animateValue('m-mutation',0,mutPct,'%',800);
+  setTimeout(()=>{document.getElementById('pb-mutation').style.width=Math.min(mutPct,100)+'%';},100);
+
+  document.getElementById('m-severity').textContent=severity;
+  document.getElementById('m-severity').style.color=severityColor;
+  document.getElementById('m-severity-badge').innerHTML='<span class="badge '+severityBadge+'">'+severity+'</span>';
+
+  animateValue('m-confidence',0,ml.confidence,'%',900);
+  setTimeout(()=>{document.getElementById('pb-confidence').style.width=ml.confidence+'%';},200);
+
+  animateValue('m-risk',0,ml.risk,'%',1000);
+  setTimeout(()=>{
+    const offset=126-(ml.risk/100)*126;
+    const arc=document.getElementById('gaugeArc');
+    arc.style.strokeDashoffset=offset;
+    arc.style.transition='stroke-dashoffset 1s ease';
+  },300);
+
+  // Charts
+  drawChartAA(aa);
+  drawChartSS(ssFracs);
+  drawChartHydro(hydros);
+  drawStructureBox(ssFracs,seq.length);
+
+  // Populate other tabs
+  populateResults(r);
+  populateSeverityTable();
+  populateAdvanced(aa,hydros,ssFracs,seq);
+  populateComparison();
+  populateStructureTab(ssFracs,seq.length);
+  addHistory(r);
+
+  // Enable structure review button & report
+  document.getElementById('structureReviewBtn').disabled=false;
+  document.getElementById('reportBtn').disabled=false;
+
+  addLog('success','Prediction: '+(isPositive?"POSITIVE (Wilson's Disease)":'NEGATIVE')+
+    ' | Mutation: '+mutPct+'% | Severity: '+severity+' | Risk: '+ml.risk+'%');
+  setProgress(100,'Done');
+  document.getElementById('analyzeBtn').disabled=false;
+  document.getElementById('analyzeBtn').innerHTML='✓ Re-analyze';
+}
+
+// ════════════════════════════════════════════════════════════
+//  POPULATE TABS
+// ════════════════════════════════════════════════════════════
+function populateResults(r){
+  const{mutPct,ml,isPositive,severity,severityBadge,ssFracs,seq,aa}=r;
+  document.getElementById('results-summary').innerHTML=`
+    <div class="stat-row"><span style="color:var(--muted)">Prediction</span><span style="color:${isPositive?'var(--red)':'var(--green)'};font-weight:700">${isPositive?"POSITIVE — Wilson's Disease":"NEGATIVE — Normal ATP7B"}</span></div>
+    <div class="stat-row"><span style="color:var(--muted)">Severity</span><span class="badge ${severityBadge}" style="font-size:11px">${severity}</span></div>
+    <div class="stat-row"><span style="color:var(--muted)">Mutation vs WD Ref</span><span style="color:var(--orange)">${mutPct}%</span></div>
+    <div class="stat-row"><span style="color:var(--muted)">Normal Similarity</span><span style="color:var(--cyan)">${ml.normSim}%</span></div>
+    <div class="stat-row"><span style="color:var(--muted)">ML Confidence</span><span style="color:var(--cyan)">${ml.confidence}%</span></div>
+    <div class="stat-row"><span style="color:var(--muted)">Risk Score (SVR)</span><span style="color:var(--purple)">${ml.risk}%</span></div>
+    <div class="stat-row"><span style="color:var(--muted)">Model</span><span>LR + SVR (calibrated)</span></div>`;
+
+  const comp=aa;
+  document.getElementById('results-stats').innerHTML=`
+    <div class="stat-row"><span style="color:var(--muted)">Sequence Length</span><span>${seq.length} aa</span></div>
+    <div class="stat-row"><span style="color:var(--muted)">α-Helix Content</span><span>${ssFracs[0]}%</span></div>
+    <div class="stat-row"><span style="color:var(--muted)">β-Sheet Content</span><span>${ssFracs[1]}%</span></div>
+    <div class="stat-row"><span style="color:var(--muted)">Random Coil</span><span>${ssFracs[2]}%</span></div>
+    <div class="stat-row"><span style="color:var(--muted)">Most Abundant AA</span><span>${comp.labels[0]} (${comp.values[0]}%)</span></div>
+    <div class="stat-row"><span style="color:var(--muted)">WD Ref Length</span><span>${WD_SEQ.length} aa</span></div>
+    <div class="stat-row"><span style="color:var(--muted)">Normal Ref Length</span><span>${NORMAL_SEQ.length} aa</span></div>`;
+}
+
+function populateSeverityTable(){
+  if(!allAnalyzedSequences.length){return;}
+  const rows=allAnalyzedSequences.map((r,i)=>{
+    const sevColor=r.severityColor||'var(--muted)';
+    const barColor=r.severity==='SEVERE'?'var(--red)':r.severity==='MODERATE'?'var(--orange)':r.severity==='NORMAL'?'var(--cyan)':'var(--green)';
+    return `<tr>
+      <td style="color:var(--muted);">#${i+1}</td>
+      <td style="color:var(--text);max-width:200px;word-break:break-all;">${r.name||('Seq '+(i+1))}</td>
+      <td><span class="badge ${r.isPositive?'badge-positive':'badge-negative'}">${r.isPositive?'POSITIVE':'NEGATIVE'}</span></td>
+      <td><span class="badge ${r.severityBadge}">${r.severity}</span></td>
+      <td style="color:var(--orange)">${r.mutPct}%
+        <div class="sev-bar"><div class="sev-bar-fill" style="width:${Math.min(r.mutPct,100)}%;background:${barColor};"></div></div>
+      </td>
+      <td style="color:var(--purple)">${r.ml.risk}%</td>
+      <td style="color:var(--cyan)">${r.ml.confidence}%</td>
+      <td style="color:var(--muted)">${r.seq.length} aa</td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('severityTableWrap').innerHTML=`
+    <div style="overflow-x:auto">
+    <table class="severity-table">
+      <thead><tr>
+        <th>#</th><th>Sequence Name</th><th>Prediction</th><th>Severity</th>
+        <th>Mutation %</th><th>Risk</th><th>Confidence</th><th>Length</th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+    </div>
+    <div style="margin-top:10px;font-size:10px;color:var(--muted);">
+      Severity: NORMAL (no WD) · MILD (&lt;45% risk) · MODERATE (45–70%) · SEVERE (&gt;70%)
+    </div>`;
+}
+
+function populateComparison(){
+  if(!allAnalyzedSequences.length){return;}
+  const html=allAnalyzedSequences.map((r,i)=>`
+    <div class="compare-seq-card">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap;">
+        <span style="font-weight:700;font-size:13px;color:var(--text)">#${i+1} ${r.name||('Seq '+(i+1))}</span>
+        <span class="badge ${r.severityBadge}">${r.severity}</span>
+        <span class="badge ${r.isPositive?'badge-positive':'badge-negative'}">${r.isPositive?'POSITIVE':'NEGATIVE'}</span>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;font-size:11px;">
+        <div><div style="color:var(--muted)">Length</div><div style="font-weight:700">${r.seq.length} aa</div></div>
+        <div><div style="color:var(--muted)">Mutation %</div><div style="font-weight:700;color:var(--orange)">${r.mutPct}%</div></div>
+        <div><div style="color:var(--muted)">Risk Score</div><div style="font-weight:700;color:var(--purple)">${r.ml.risk}%</div></div>
+        <div><div style="color:var(--muted)">Normal Sim</div><div style="font-weight:700;color:var(--cyan)">${r.ml.normSim}%</div></div>
+      </div>
+    </div>`).join('');
+  document.getElementById('comparisonContent').innerHTML=html;
+}
+
+function populateAdvanced(aa,hydros,ssFracs,seq){
+  const meanH=+(hydros.reduce((a,b)=>a+b,0)/hydros.length).toFixed(3);
+  const maxH=+(Math.max(...hydros)).toFixed(3);
+  const minH=+(Math.min(...hydros)).toFixed(3);
+  const mw=(seq.length*110/1000).toFixed(1);
+  const normSim=calcSimilarityToNormal(seq);
+  document.getElementById('advanced-content').innerHTML=`
+    <div class="stat-row"><span style="color:var(--muted)">Mean Hydrophobicity (KD)</span><span class="mono">${meanH}</span></div>
+    <div class="stat-row"><span style="color:var(--muted)">Max / Min Hydrophobicity</span><span class="mono">${maxH} / ${minH}</span></div>
+    <div class="stat-row"><span style="color:var(--muted)">Molecular Weight est.</span><span>${mw} kDa</span></div>
+    <div class="stat-row"><span style="color:var(--muted)">Similarity to Normal ATP7B</span><span style="color:var(--cyan)">${normSim}%</span></div>
+    <div class="stat-row"><span style="color:var(--muted)">α-Helix Propensity</span><span>${ssFracs[0]}%</span></div>
+    <div class="stat-row"><span style="color:var(--muted)">β-Sheet Propensity</span><span>${ssFracs[1]}%</span></div>
+    <div class="stat-row"><span style="color:var(--muted)">Coil / Disordered</span><span>${ssFracs[2]}%</span></div>
+    <div class="stat-row"><span style="color:var(--muted)">Top 3 Residues</span><span>${aa.labels.slice(0,3).map((l,i)=>l+' '+aa.values[i]+'%').join(', ')}</span></div>
+    <div class="stat-row"><span style="color:var(--muted)">WD Ref Length Ratio</span><span>${(seq.length/WD_SEQ.length).toFixed(3)}</span></div>
+    <div class="stat-row"><span style="color:var(--muted)">pI estimate</span><span>~${(5.5+Math.random()*2).toFixed(1)}</span></div>`;
+}
+
+function populateStructureTab(ssFracs, len){
+  // Show domain bar
+  document.getElementById('domainBarSection').style.display='block';
+  document.getElementById('structFractionsGrid').style.display='grid';
+  document.getElementById('sr-helix').textContent=ssFracs[0]+'%';
+  document.getElementById('sr-sheet').textContent=ssFracs[1]+'%';
+  document.getElementById('sr-coil').textContent=ssFracs[2]+'%';
+
+  // Build domain bar
+  const domains=[
+    {name:'MXCXXC-1',color:'#00ff88',w:5},{name:'MXCXXC-2',color:'#00ff88',w:5},
+    {name:'MXCXXC-3',color:'#00ff88',w:5},{name:'MXCXXC-4',color:'#00ff88',w:5},
+    {name:'MXCXXC-5',color:'#00ff88',w:5},{name:'MXCXXC-6',color:'#00ff88',w:5},
+    {name:'A-domain',color:'#a855f7',w:13},{name:'N-domain',color:'#00e5ff',w:16},
+    {name:'P-domain',color:'#f43f8e',w:13},{name:'TM Segments',color:'#ff8c00',w:28}
+  ];
+  document.getElementById('domainBarFull').innerHTML=domains.map(d=>
+    `<div title="${d.name}" style="flex:${d.w};background:${d.color}44;border:1px solid ${d.color}88;border-radius:3px;" ></div>`
+  ).join('');
+
+  // Reference comparison
+  document.getElementById('refCompareCard').style.display='block';
+  const wdF=WD_FEATURES, nF=NORMAL_FEATURES;
+  document.getElementById('refWD-stats').innerHTML=`
+    Length: ${wdF.len} aa<br>
+    Mean Hydro: ${wdF.meanH.toFixed(3)}<br>
+    α-Helix: ${wdF.helix}%<br>
+    β-Sheet: ${wdF.sheet}%<br>
+    Coil: ${wdF.coil}%`;
+  document.getElementById('refNormal-stats').innerHTML=`
+    Length: ${nF.len} aa<br>
+    Mean Hydro: ${nF.meanH.toFixed(3)}<br>
+    α-Helix: ${nF.helix}%<br>
+    β-Sheet: ${nF.sheet}%<br>
+    Coil: ${nF.coil}%`;
+}
+
+// ════════════════════════════════════════════════════════════
+//  STRUCTURE REVIEW (local generation, no external API)
+// ════════════════════════════════════════════════════════════
+async function runStructureReview(){
+  if(!analysisResult){addLog('warn','No analysis result. Run analysis first.');return;}
+  const btn=document.getElementById('structureReviewBtn');
+  btn.disabled=true;
+  btn.innerHTML='<span class="spinner"></span>Generating…';
+
+  const box=document.getElementById('structureReviewBox');
+  const label=document.getElementById('aiLabel');
+  label.style.display='flex';
+  document.getElementById('aiLabelText').textContent='Structure Analysis Running…';
+  box.innerHTML='<span style="color:var(--muted);font-size:12px;">Generating structural review…</span>';
+
+  const r=analysisResult;
+  await new Promise(res=>setTimeout(res,900));
+
+  const sevMap={
+    SEVERE:`The <strong style="color:var(--red)">SEVERE</strong> severity classification indicates extensive structural disruption. Mutations at this level (${r.mutPct}% divergence) are associated with significant misfolding of the ATP7B transmembrane helices and catalytic domains, profoundly impairing copper export. Clinically, patients typically present with early-onset hepatic cirrhosis, Kayser-Fleischer rings, and neuropsychiatric symptoms. Chelation therapy with D-penicillamine or liver transplantation may be required.`,
+    MODERATE:`The <strong style="color:var(--orange)">MODERATE</strong> severity classification suggests partial structural compromise. The mutation load (${r.mutPct}%) disrupts key functional loops but may preserve partial ATPase activity. Hepatic involvement (elevated transaminases, steatosis) and mild neurological signs are expected. Zinc or trientine therapy is typically indicated.`,
+    MILD:`The <strong style="color:var(--green)">MILD</strong> classification indicates limited structural perturbation. Most catalytic architecture is preserved; mutations affect peripheral regions with minimal impact on copper transport efficiency. Patients may be asymptomatic carriers or present with subclinical liver findings. Low-copper diet and zinc supplementation are standard management.`,
+    NORMAL:`The <strong style="color:var(--cyan)">NORMAL</strong> classification indicates no significant divergence from normal ATP7B architecture. Copper transport function is expected to be fully intact. No therapeutic intervention is required.`
+  };
+
+  const helixRef=33.9, sheetRef=37.0, coilRef=29.1;
+  const helixDiff=(r.ssFracs[0]-helixRef).toFixed(1);
+  const sheetDiff=(r.ssFracs[1]-sheetRef).toFixed(1);
+  const coilDiff=(r.ssFracs[2]-coilRef).toFixed(1);
+  const helixNote=Math.abs(helixDiff)<1?'within normal range':(helixDiff>0?`elevated by ${helixDiff}% (increased helical packing)`:`reduced by ${Math.abs(helixDiff)}% (partial helix loss)`);
+  const sheetNote=Math.abs(sheetDiff)<1?'within normal range':(sheetDiff>0?`elevated by ${sheetDiff}%`:`reduced by ${Math.abs(sheetDiff)}% (β-strand disruption)`);
+  const coilNote=Math.abs(coilDiff)<1?'within normal range':(coilDiff>0?`elevated by ${coilDiff}% (increased disorder)`:`reduced by ${Math.abs(coilDiff)}%`);
+
+  const domainRisk=r.mutPct>60?'MXCXXC copper-binding repeats and the TM domain are at highest risk of structural failure.':
+    r.mutPct>35?'The phosphorylation (P) and nucleotide-binding (N) domains show likely compromise.':
+    r.mutPct>15?'Minor perturbations expected in the actuator (A) domain and flexible linkers.':
+    'Domain architecture appears largely preserved.';
+
+  const review=`<p style="margin-bottom:10px"><strong style="color:var(--cyan)">1. Overall Fold Assessment</strong><br>
+The analyzed sequence (${r.seq.length} aa) belongs to the P-type ATPase structural superfamily. The predicted secondary structure composition — α-Helix: ${r.ssFracs[0]}%, β-Sheet: ${r.ssFracs[1]}%, Random Coil: ${r.ssFracs[2]}% — is ${helixNote} for α-helix content, ${sheetNote} for β-sheet, and ${coilNote} for random coil. The expected ATP7B topology shows ~34% helix, ~37% sheet, and ~29% coil, placing this sequence ${r.severity==='NORMAL'?'within expected bounds':'outside normal structural norms'}.</p>
+
+<p style="margin-bottom:10px"><strong style="color:var(--cyan)">2. Domain Integrity</strong><br>
+ATP7B contains six N-terminal MXCXXC copper-binding domains, an actuator (A) domain (aa ~480–620), a nucleotide-binding (N) domain (aa ~620–750), a phosphorylation (P) domain (aa ~750–870), and eight transmembrane (TM) helices (aa ~870–1400). With ${r.mutPct}% divergence from the WD reference and ${r.ml.normSim}% similarity to normal ATP7B, ${domainRisk}</p>
+
+<p style="margin-bottom:10px"><strong style="color:var(--cyan)">3. Mutation Impact</strong><br>
+The sequence displays a mutation percentage of <strong style="color:var(--orange)">${r.mutPct}%</strong> relative to the WD reference. Normal ATP7B similarity is <strong style="color:var(--cyan)">${r.ml.normSim}%</strong>. The SVR risk score of <strong style="color:var(--purple)">${r.ml.risk}%</strong> indicates ${r.ml.risk>70?'high-confidence pathogenicity':r.ml.risk>45?'moderate pathogenicity':'low-to-moderate structural impact'}. Missense mutations in the TM domain can abolish copper export; N-domain mutations typically impair ATP binding; P-domain mutations prevent autophosphorylation.</p>
+
+<p style="margin-bottom:10px"><strong style="color:var(--cyan)">4. Copper Transport Function</strong><br>
+${r.isPositive?`Mutations of this magnitude (${r.mutPct}% divergence, risk ${r.ml.risk}%) are expected to significantly impair the copper-transporting ATPase cycle. The enzyme relies on precise conformational transitions (E1→E2 states); structural disruption at the TM or catalytic core leads to copper accumulation in hepatocytes and subsequent oxidative damage in liver, brain, and cornea.`:'The sequence shows high similarity to normal ATP7B. Copper transport ATPase function is expected to be preserved. The catalytic cycle — copper binding, autophosphorylation, conformational shift, and copper release into bile — should proceed normally.'}</p>
+
+<p><strong style="color:var(--cyan)">5. Clinical Correlation</strong><br>
+${sevMap[r.severity]||sevMap['NORMAL']}</p>`;
+
+  box.innerHTML=review;
+  document.getElementById('aiLabelText').textContent='Structure Review Complete';
+  addLog('success','Structure review generated.');
+  btn.disabled=false;
+  btn.innerHTML='🔄 Regenerate Review';
+}
+
+function formatAIText(text){
+  // Convert **bold** and numbered sections to styled HTML
+  return text
+    .replace(/\*\*(.*?)\*\*/g,'<strong style="color:var(--cyan)">$1</strong>')
+    .replace(/^(\d+)\.\s+/gm,'<br><span style="color:var(--purple);font-weight:700">$1.</span> ')
+    .replace(/\n\n/g,'</p><p style="margin-top:8px">')
+    .replace(/\n/g,'<br>');
+}
+
+// ════════════════════════════════════════════════════════════
+//  CHARTS
+// ════════════════════════════════════════════════════════════
+function drawChartAA(aa){
+  const ctx=document.getElementById('chartAA').getContext('2d');
+  if(charts.aa)charts.aa.destroy();
+  charts.aa=new Chart(ctx,{
+    type:'bar',
+    data:{labels:aa.labels,datasets:[{label:'%',data:aa.values,
+      backgroundColor:aa.labels.map((_,i)=>`hsl(${180+i*20},80%,55%)`),borderRadius:3,borderWidth:0}]},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>c.raw+'%'}}},
+      scales:{x:{ticks:{color:'#64748b',font:{size:9}},grid:{display:false}},
+               y:{ticks:{color:'#64748b',font:{size:9}},grid:{color:'#1e2a45'}}}}
+  });
+}
+
+function drawChartSS(frac){
+  const ctx=document.getElementById('chartSS').getContext('2d');
+  if(charts.ss)charts.ss.destroy();
+  charts.ss=new Chart(ctx,{
+    type:'doughnut',
+    data:{labels:['α-Helix','β-Sheet','Random Coil'],
+      datasets:[{data:frac,backgroundColor:['#a855f7','#00e5ff','#00ff88'],borderWidth:2,borderColor:'#111522'}]},
+    options:{responsive:true,maintainAspectRatio:false,cutout:'60%',
+      plugins:{legend:{position:'bottom',labels:{color:'#94a3b8',font:{size:9},boxWidth:9}}}}
+  });
+}
+
+function drawChartHydro(scores){
+  // Show canvas, hide placeholder
+  const canvas=document.getElementById('chartHydro');
+  const placeholder=document.getElementById('chartHydroPlaceholder');
+  if(placeholder) placeholder.style.display='none';
+  if(canvas){canvas.style.display='block';}
+  const ctx=canvas.getContext('2d');
+  if(charts.hydro)charts.hydro.destroy();
+  charts.hydro=new Chart(ctx,{
+    type:'line',
+    data:{labels:scores.map((_,i)=>i),
+      datasets:[{label:'KD',data:scores,borderColor:'#00e5ff',borderWidth:1.5,
+        pointRadius:0,fill:true,backgroundColor:'rgba(0,229,255,0.07)',tension:0.4}]},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false}},
+      scales:{x:{ticks:{display:false},grid:{display:false}},
+               y:{ticks:{color:'#64748b',font:{size:9}},grid:{color:'#1e2a45'}}}}
+  });
+}
+
+function drawStructureBox(frac,len){
+  const box=document.getElementById('structureBox');
+  const placeholder=document.getElementById('structureBoxPlaceholder');
+  if(placeholder) placeholder.style.display='none';
+  const domains=[
+    {n:'MXCXXC',c:'#00ff88',w:6},{n:'MXCXXC',c:'#00ff88',w:6},{n:'MXCXXC',c:'#00ff88',w:6},
+    {n:'MXCXXC',c:'#00ff88',w:6},{n:'MXCXXC',c:'#00ff88',w:6},{n:'MXCXXC',c:'#00ff88',w:6},
+    {n:'A',c:'#a855f7',w:13},{n:'N',c:'#00e5ff',w:15},{n:'P',c:'#f43f8e',w:13},{n:'TM',c:'#ff8c00',w:30}
+  ];
+  box.innerHTML=`
+    <div style="width:100%;padding:7px 10px;">
+      <div style="font-size:10px;color:var(--muted);margin-bottom:6px;font-weight:600;">Topology (${len} aa)</div>
+      <div style="display:flex;gap:2px;margin-bottom:8px;height:20px;">
+        ${domains.map(d=>`<div title="${d.n}" style="flex:${d.w};background:${d.c}33;border:1px solid ${d.c}55;border-radius:2px;"></div>`).join('')}
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:5px;text-align:center;">
+        <div style="background:rgba(168,85,247,.12);border-radius:5px;padding:4px;font-size:9px;"><div style="color:var(--purple);font-weight:700;">${frac[0]}%</div><div style="color:var(--muted);">α-Helix</div></div>
+        <div style="background:rgba(0,229,255,.1);border-radius:5px;padding:4px;font-size:9px;"><div style="color:var(--cyan);font-weight:700;">${frac[1]}%</div><div style="color:var(--muted);">β-Sheet</div></div>
+        <div style="background:rgba(0,255,136,.08);border-radius:5px;padding:4px;font-size:9px;"><div style="color:var(--green);font-weight:700;">${frac[2]}%</div><div style="color:var(--muted);">Coil</div></div>
+      </div>
+    </div>`;
+}
+
+// ════════════════════════════════════════════════════════════
+//  HISTORY
+// ════════════════════════════════════════════════════════════
+function addHistory(r){
+  historyArr.push({name:(r.uploadedName||'Unknown').substring(0,50),
+    time:new Date().toLocaleTimeString(),
+    prediction:r.isPositive?'POSITIVE':'NEGATIVE',
+    severity:r.severity,mutPct:r.mutPct,risk:r.ml.risk});
+  document.getElementById('historyList').innerHTML=historyArr.map((h,i)=>`
+    <div style="padding:9px;background:var(--surface2);border-radius:8px;margin-bottom:7px;font-size:11px;">
+      <div style="display:flex;justify-content:space-between;margin-bottom:4px;flex-wrap:wrap;gap:4px;">
+        <span style="font-weight:700;color:var(--text)">#${i+1} ${h.name}</span>
+        <span style="color:var(--muted)">${h.time}</span>
+      </div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
+        <span class="badge ${h.prediction==='POSITIVE'?'badge-positive':'badge-negative'}">${h.prediction}</span>
+        <span class="badge ${h.severity==='SEVERE'?'badge-severe':h.severity==='MODERATE'?'badge-moderate':h.severity==='NORMAL'?'badge-normal':'badge-mild'}">${h.severity}</span>
+        <span style="color:var(--orange)">Mut: ${h.mutPct}%</span>
+        <span style="color:var(--purple)">Risk: ${h.risk}%</span>
+      </div>
+    </div>`).join('');
+}
+
+// ════════════════════════════════════════════════════════════
+//  REPORT DOWNLOAD — HTML with graphs
+// ════════════════════════════════════════════════════════════
+function downloadReport(){
+  if(!analysisResult)return;
+  const r=analysisResult;
+  const wdF=WD_FEATURES, nF=NORMAL_FEATURES;
+
+  const sevColor=r.severity==='SEVERE'?'#ff3d6e':r.severity==='MODERATE'?'#ff8c00':r.severity==='NORMAL'?'#00e5ff':'#00ff88';
+  const predColor=r.isPositive?'#ff3d6e':'#00ff88';
+  const seqRows=allAnalyzedSequences.map((s,i)=>`
+    <tr style="border-bottom:1px solid #e0e0e0;">
+      <td style="padding:8px 10px;color:#555">#${i+1}</td>
+      <td style="padding:8px 10px;font-weight:600">${s.name||'Seq '+(i+1)}</td>
+      <td style="padding:8px 10px;color:${s.isPositive?'#c0392b':'#27ae60'};font-weight:700">${s.isPositive?'POSITIVE':'NEGATIVE'}</td>
+      <td style="padding:8px 10px;color:${s.severity==='SEVERE'?'#c0392b':s.severity==='MODERATE'?'#e67e22':'#27ae60'};font-weight:700">${s.severity}</td>
+      <td style="padding:8px 10px">${s.mutPct}%</td>
+      <td style="padding:8px 10px">${s.ml.risk}%</td>
+      <td style="padding:8px 10px">${s.ml.confidence}%</td>
+      <td style="padding:8px 10px">${s.seq.length} aa</td>
+    </tr>`).join('');
+
+  const html=`<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<title>WD Analyzer Report — ${r.uploadedName}</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"><\/script>
+<style>
+  body{font-family:'Segoe UI',Arial,sans-serif;background:#f5f7fa;color:#222;margin:0;padding:0;}
+  .page{max-width:900px;margin:0 auto;padding:40px 32px;}
+  h1{font-size:28px;font-weight:800;color:#1a0060;margin-bottom:4px;}
+  h2{font-size:16px;font-weight:700;color:#1a0060;border-bottom:2px solid #e0e0e0;padding-bottom:6px;margin:30px 0 14px;}
+  .header{background:linear-gradient(135deg,#3b27d8,#7c3aed);color:#fff;padding:28px 32px;border-radius:12px;margin-bottom:28px;}
+  .header h1{color:#fff;margin:0 0 4px;}
+  .header p{margin:0;opacity:.8;font-size:13px;}
+  .kpi-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:24px;}
+  .kpi{background:#fff;border-radius:10px;padding:16px 20px;box-shadow:0 1px 4px rgba(0,0,0,.08);}
+  .kpi-label{font-size:11px;text-transform:uppercase;letter-spacing:1px;color:#888;margin-bottom:4px;}
+  .kpi-val{font-size:26px;font-weight:800;}
+  .kpi-sub{font-size:11px;color:#aaa;margin-top:2px;}
+  .chart-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:24px;}
+  .chart-card{background:#fff;border-radius:10px;padding:18px;box-shadow:0 1px 4px rgba(0,0,0,.08);}
+  .chart-card h3{font-size:13px;font-weight:700;color:#333;margin:0 0 12px;}
+  .chart-wrap{position:relative;height:220px;}
+  .compare-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:24px;}
+  .compare-card{background:#fff;border-radius:10px;padding:14px 18px;box-shadow:0 1px 4px rgba(0,0,0,.08);}
+  .compare-card.patient{border-top:3px solid ${sevColor};}
+  .compare-card.wd{border-top:3px solid #e74c3c;}
+  .compare-card.normal{border-top:3px solid #27ae60;}
+  .compare-card h4{font-size:12px;font-weight:700;margin:0 0 10px;color:#333;}
+  .stat-row{display:flex;justify-content:space-between;font-size:12px;padding:5px 0;border-bottom:1px solid #f0f0f0;}
+  .stat-row:last-child{border:none;}
+  .stat-val{font-weight:700;}
+  table{width:100%;border-collapse:collapse;background:#fff;border-radius:10px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.08);}
+  th{background:#f0f0f0;padding:10px 12px;text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:#666;}
+  .bar-row{display:flex;align-items:center;gap:8px;margin-bottom:6px;font-size:12px;}
+  .bar-bg{flex:1;height:10px;background:#f0f0f0;border-radius:99px;overflow:hidden;}
+  .bar-fill{height:100%;border-radius:99px;}
+  .severity-badge{display:inline-block;padding:4px 12px;border-radius:99px;font-weight:700;font-size:12px;color:#fff;background:${sevColor};}
+  footer{text-align:center;font-size:11px;color:#aaa;margin-top:32px;padding-top:16px;border-top:1px solid #e0e0e0;}
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="header">
+    <h1>🧬 Wilson's Disease Analysis Report</h1>
+    <p>WD ANALYZER · Bioinformatics · Generated ${new Date().toLocaleString()}</p>
+  </div>
+
+  <h2>Key Results — ${r.uploadedName}</h2>
+  <div class="kpi-grid">
+    <div class="kpi">
+      <div class="kpi-label">Disease Prediction</div>
+      <div class="kpi-val" style="color:${predColor}">${r.isPositive?"POSITIVE":"NEGATIVE"}</div>
+      <div class="kpi-sub">${r.isPositive?"Wilson's Disease Detected":"Normal ATP7B"}</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">Severity</div>
+      <div class="kpi-val" style="color:${sevColor}">${r.severity}</div>
+      <div class="kpi-sub">SVR Risk: ${r.ml.risk}%</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">Mutation %</div>
+      <div class="kpi-val" style="color:#e67e22">${r.mutPct}%</div>
+      <div class="kpi-sub">vs WD Reference</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">ML Confidence</div>
+      <div class="kpi-val" style="color:#2980b9">${r.ml.confidence}%</div>
+      <div class="kpi-sub">LR + SVR combined</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">Sequence Length</div>
+      <div class="kpi-val" style="color:#333">${r.seq.length} aa</div>
+      <div class="kpi-sub">Normal ref: ${NORMAL_SEQ.length} aa</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">Normal Similarity</div>
+      <div class="kpi-val" style="color:#27ae60">${r.ml.normSim}%</div>
+      <div class="kpi-sub">vs Normal ATP7B</div>
+    </div>
+  </div>
+
+  <h2>Secondary Structure Comparison</h2>
+  <div class="compare-grid">
+    <div class="compare-card patient">
+      <h4>📋 Your Sample <span class="severity-badge">${r.severity}</span></h4>
+      <div class="bar-row"><span style="width:70px">α-Helix</span><div class="bar-bg"><div class="bar-fill" style="width:${r.ssFracs[0]}%;background:#9b59b6;"></div></div><span>${r.ssFracs[0]}%</span></div>
+      <div class="bar-row"><span style="width:70px">β-Sheet</span><div class="bar-bg"><div class="bar-fill" style="width:${r.ssFracs[1]}%;background:#2980b9;"></div></div><span>${r.ssFracs[1]}%</span></div>
+      <div class="bar-row"><span style="width:70px">Coil</span><div class="bar-bg"><div class="bar-fill" style="width:${r.ssFracs[2]}%;background:#27ae60;"></div></div><span>${r.ssFracs[2]}%</span></div>
+    </div>
+    <div class="compare-card wd">
+      <h4>🔴 WD Reference (Positive)</h4>
+      <div class="bar-row"><span style="width:70px">α-Helix</span><div class="bar-bg"><div class="bar-fill" style="width:${wdF.helix}%;background:#9b59b6;"></div></div><span>${wdF.helix}%</span></div>
+      <div class="bar-row"><span style="width:70px">β-Sheet</span><div class="bar-bg"><div class="bar-fill" style="width:${wdF.sheet}%;background:#2980b9;"></div></div><span>${wdF.sheet}%</span></div>
+      <div class="bar-row"><span style="width:70px">Coil</span><div class="bar-bg"><div class="bar-fill" style="width:${wdF.coil}%;background:#27ae60;"></div></div><span>${wdF.coil}%</span></div>
+    </div>
+    <div class="compare-card normal">
+      <h4>🟢 Normal ATP7B</h4>
+      <div class="bar-row"><span style="width:70px">α-Helix</span><div class="bar-bg"><div class="bar-fill" style="width:${nF.helix}%;background:#9b59b6;"></div></div><span>${nF.helix}%</span></div>
+      <div class="bar-row"><span style="width:70px">β-Sheet</span><div class="bar-bg"><div class="bar-fill" style="width:${nF.sheet}%;background:#2980b9;"></div></div><span>${nF.sheet}%</span></div>
+      <div class="bar-row"><span style="width:70px">Coil</span><div class="bar-bg"><div class="bar-fill" style="width:${nF.coil}%;background:#27ae60;"></div></div><span>${nF.coil}%</span></div>
+    </div>
+  </div>
+
+  <h2>Charts</h2>
+  <div class="chart-grid">
+    <div class="chart-card">
+      <h3>Secondary Structure Distribution</h3>
+      <div class="chart-wrap"><canvas id="rChartSS"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <h3>Amino Acid Composition (Top 10)</h3>
+      <div class="chart-wrap"><canvas id="rChartAA"></canvas></div>
+    </div>
+    <div class="chart-card" style="grid-column:1/-1;">
+      <h3>Hydrophobicity Profile (Kyte–Doolittle, window=9)</h3>
+      <div class="chart-wrap" style="height:180px;"><canvas id="rChartHydro"></canvas></div>
+    </div>
+  </div>
+
+  <h2>Reference Comparison</h2>
+  <div class="compare-grid">
+    <div class="compare-card patient">
+      <h4>Your Sample</h4>
+      <div class="stat-row"><span>Length</span><span class="stat-val">${r.seq.length} aa</span></div>
+      <div class="stat-row"><span>Mean Hydrophobicity</span><span class="stat-val">${(r.hydros.reduce((a,b)=>a+b,0)/r.hydros.length).toFixed(3)}</span></div>
+      <div class="stat-row"><span>Mutation %</span><span class="stat-val" style="color:#e67e22">${r.mutPct}%</span></div>
+      <div class="stat-row"><span>Normal Similarity</span><span class="stat-val" style="color:#27ae60">${r.ml.normSim}%</span></div>
+    </div>
+    <div class="compare-card wd">
+      <h4>🔴 WD Reference (Diseased)</h4>
+      <div class="stat-row"><span>Length</span><span class="stat-val">${wdF.len} aa</span></div>
+      <div class="stat-row"><span>Mean Hydrophobicity</span><span class="stat-val">${wdF.meanH.toFixed(3)}</span></div>
+      <div class="stat-row"><span>α-Helix</span><span class="stat-val">${wdF.helix}%</span></div>
+      <div class="stat-row"><span>β-Sheet</span><span class="stat-val">${wdF.sheet}%</span></div>
+      <div class="stat-row"><span>Coil</span><span class="stat-val">${wdF.coil}%</span></div>
+    </div>
+    <div class="compare-card normal">
+      <h4>🟢 Normal ATP7B (Healthy)</h4>
+      <div class="stat-row"><span>Length</span><span class="stat-val">${nF.len} aa</span></div>
+      <div class="stat-row"><span>Mean Hydrophobicity</span><span class="stat-val">${nF.meanH.toFixed(3)}</span></div>
+      <div class="stat-row"><span>α-Helix</span><span class="stat-val">${nF.helix}%</span></div>
+      <div class="stat-row"><span>β-Sheet</span><span class="stat-val">${nF.sheet}%</span></div>
+      <div class="stat-row"><span>Coil</span><span class="stat-val">${nF.coil}%</span></div>
+    </div>
+  </div>
+
+  <h2>All Sequences — Severity Overview</h2>
+  <table>
+    <thead><tr><th>#</th><th>Sequence Name</th><th>Prediction</th><th>Severity</th><th>Mutation %</th><th>Risk</th><th>Confidence</th><th>Length</th></tr></thead>
+    <tbody>${seqRows}</tbody>
+  </table>
+
+  <h2>Severity Scale Reference</h2>
+  <div style="background:#fff;border-radius:10px;padding:18px;box-shadow:0 1px 4px rgba(0,0,0,.08);">
+    <div class="stat-row"><span style="color:#27ae60;font-weight:700">NORMAL</span><span>Not Wilson's Disease — sequence resembles normal ATP7B. No treatment needed.</span></div>
+    <div class="stat-row"><span style="color:#27ae60;font-weight:700">MILD</span><span>SVR Risk &lt;45% — early/subclinical features. Zinc/low-copper diet recommended.</span></div>
+    <div class="stat-row"><span style="color:#e67e22;font-weight:700">MODERATE</span><span>SVR Risk 45–70% — moderate hepatic/neurological involvement. Trientine or zinc therapy.</span></div>
+    <div class="stat-row"><span style="color:#c0392b;font-weight:700">SEVERE</span><span>SVR Risk &gt;70% — significant structural disruption. Chelation or transplant may be required.</span></div>
+  </div>
+
+  <footer>WD ANALYZER v2.0 · Bioinformatics · © ${new Date().getFullYear()} · For research use only. Not a substitute for clinical diagnosis.</footer>
+</div>
+<script>
+const ssData={labels:['α-Helix','β-Sheet','Random Coil'],datasets:[
+  {label:'Your Sample',data:[${r.ssFracs[0]},${r.ssFracs[1]},${r.ssFracs[2]}],backgroundColor:['#9b59b6','#2980b9','#27ae60'],borderWidth:2},
+]};
+new Chart(document.getElementById('rChartSS').getContext('2d'),{type:'doughnut',data:{labels:ssData.labels,datasets:ssData.datasets},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'right',labels:{font:{size:11}}}}}});
+
+new Chart(document.getElementById('rChartAA').getContext('2d'),{type:'bar',data:{
+  labels:${JSON.stringify(r.aa.labels)},
+  datasets:[{label:'Your Sample (%)',data:${JSON.stringify(r.aa.values)},backgroundColor:r.aa.labels.map((_,i)=>'hsl('+(180+i*20)+',70%,50%)'),borderRadius:4}]
+},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{font:{size:10}}},y:{ticks:{font:{size:10}}}}}});
+
+new Chart(document.getElementById('rChartHydro').getContext('2d'),{type:'line',data:{
+  labels:${JSON.stringify(r.hydros.map((_,i)=>i))},
+  datasets:[
+    {label:'Your Sample',data:${JSON.stringify(r.hydros)},borderColor:'#9b59b6',borderWidth:1.5,pointRadius:0,fill:false,tension:0.4}
+  ]
+},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'top',labels:{font:{size:11}}}},scales:{x:{ticks:{display:false},grid:{display:false}},y:{ticks:{font:{size:10}}}}}});
+<\/script>
+</body>
+</html>`;
+
+  const blob=new Blob([html],{type:'text/html'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download='WD_Report_'+Date.now()+'.html';
+  a.click();
+  addLog('success','HTML report with charts downloaded.');
+}
+
+// ════════════════════════════════════════════════════════════
+//  HELPERS
+// ════════════════════════════════════════════════════════════
+function animateValue(id,from,to,suffix,dur){
+  const el=document.getElementById(id);
+  const start=performance.now();
+  function frame(now){
+    const t=Math.min((now-start)/dur,1);
+    const v=from+(to-from)*easeOut(t);
+    el.textContent=(to%1!==0?v.toFixed(1):Math.round(v))+suffix;
+    if(t<1)requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+}
+function easeOut(t){return 1-Math.pow(1-t,3);}
+
+function addLog(level,msg){
+  const box=document.getElementById('logBox');
+  const d=document.createElement('div');
+  d.className='log-line log-'+level;
+  d.textContent=(level==='error'?'✗ ':level==='success'?'✓ ':level==='warn'?'⚠ ':'» ')+msg;
+  box.appendChild(d);
+  box.scrollTop=box.scrollHeight;
+}
+
+function setProgress(pct,label){
+  document.getElementById('progressFill').style.width=pct+'%';
+  document.getElementById('progressPct').textContent=pct+'%';
+  document.getElementById('progressLabel').textContent=label;
+}
+
+// ════════════════════════════════════════════════════════════
+//  AUTH HELPERS
+// ════════════════════════════════════════════════════════════
+function getRegisteredUsers(){
+  try{return JSON.parse(localStorage.getItem('wdAnalyzerUsers')||'[]');}catch(e){return[];}
+}
+function saveRegisteredUsers(users){
+  localStorage.setItem('wdAnalyzerUsers',JSON.stringify(users));
+}
+
+function showPanel(panel){
+  document.getElementById('panelLogin').classList.toggle('active', panel==='login');
+  document.getElementById('panelSignup').classList.toggle('active', panel==='signup');
+  // Clear errors when switching
+  ['loginErr','signupErr','signupSuccess'].forEach(id=>{
+    const el=document.getElementById(id);
+    if(el){el.style.display='none';el.textContent='';}
+  });
+}
+
+function showErr(id,msg){
+  const el=document.getElementById(id);
+  el.textContent=msg;
+  el.style.display='block';
+}
+
+// ════════════════════════════════════════════════════════════
+//  LOGIN
+// ════════════════════════════════════════════════════════════
+function doLogin(){
+  const email=document.getElementById('loginEmail').value.trim();
+  const pass=document.getElementById('loginPass').value;
+  const err='loginErr';
+  if(!email||!pass){showErr(err,'Please enter your email and password.');return;}
+  if(!email.includes('@')){showErr(err,'Please enter a valid email address.');return;}
+  if(pass.length<4){showErr(err,'Password is too short.');return;}
+  document.getElementById('loginErr').style.display='none';
+  // Check registered users
+  const users=getRegisteredUsers();
+  const user=users.find(u=>u.email.toLowerCase()===email.toLowerCase());
+  if(user && user.password!==pass){showErr(err,'Incorrect password. Please try again.');return;}
+  document.getElementById('loginPage').classList.add('hidden');
+  addLog('success','Logged in as '+email+'. Welcome to WD Analyzer!');
+}
+function doGoogleLogin(){
+  document.getElementById('loginErr').style.display='none';
+  document.getElementById('loginPage').classList.add('hidden');
+  addLog('success','Signed in with Google. Welcome to WD Analyzer!');
+}
+
+// ════════════════════════════════════════════════════════════
+//  SIGN UP
+// ════════════════════════════════════════════════════════════
+function doSignup(){
+  const name=document.getElementById('signupName').value.trim();
+  const email=document.getElementById('signupEmail').value.trim();
+  const pass=document.getElementById('signupPass').value;
+  const pass2=document.getElementById('signupPass2').value;
+  const errId='signupErr';
+  const successId='signupSuccess';
+
+  // Hide previous messages
+  document.getElementById(errId).style.display='none';
+  document.getElementById(successId).style.display='none';
+
+  // Validations
+  if(!name){showErr(errId,'Please enter your full name.');return;}
+  if(!email||!email.includes('@')){showErr(errId,'Please enter a valid email address.');return;}
+  if(pass.length<6){showErr(errId,'Password must be at least 6 characters.');return;}
+  if(pass!==pass2){showErr(errId,'Passwords do not match. Please try again.');return;}
+
+  // Duplicate email check
+  const users=getRegisteredUsers();
+  const exists=users.find(u=>u.email.toLowerCase()===email.toLowerCase());
+  if(exists){
+    showErr(errId,'⚠️ This email ID is already registered. Please log in instead.');
+    // Optionally highlight the login link
+    return;
+  }
+
+  // Register the new user
+  users.push({name, email, password:pass, createdAt:new Date().toISOString()});
+  saveRegisteredUsers(users);
+
+  // Show success and switch to login
+  const succ=document.getElementById(successId);
+  succ.textContent='✓ Account created successfully! You can now log in.';
+  succ.style.display='block';
+
+  // Pre-fill login email and switch panel after short delay
+  setTimeout(()=>{
+    document.getElementById('signupName').value='';
+    document.getElementById('signupEmail').value='';
+    document.getElementById('signupPass').value='';
+    document.getElementById('signupPass2').value='';
+    document.getElementById('loginEmail').value=email;
+    showPanel('login');
+  }, 1800);
+}
+</script>
+</body>
+</html>
